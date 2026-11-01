@@ -1,0 +1,19 @@
+{
+  "name": "spm_hcmut_assignment",
+  "version": "1.0.0",
+  "description": "Library borrowing management system",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsc -w",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "node src/server.ts",
+    "clear": "node delete.js"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
