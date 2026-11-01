@@ -6,14 +6,21 @@
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "tsc -w",
-    "build": "tsc",
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc && tsc-alias",
     "start": "node dist/server.js",
     "test": "node src/server.ts",
     "clear": "node delete.js"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }
