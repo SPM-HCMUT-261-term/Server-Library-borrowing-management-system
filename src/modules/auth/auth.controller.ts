@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
 import z from "zod";
 
+import { AuthService } from "./auth.service";
+
 const loginRequestSchema = z.object({
   accountId: z.string().min(1),
   password: z.string().min(6),

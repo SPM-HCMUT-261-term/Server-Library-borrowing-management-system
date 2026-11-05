@@ -1,7 +1,9 @@
 import type { Request, Response } from "express";
 import z from "zod";
 
+/*
 
+*/
 function getUsers(req: Request, res: Response): void {
     // TODO
 }
