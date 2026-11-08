@@ -1,32 +1,32 @@
 import type {AdminRepository} from "./repositories/admin.repository.interface";
 import type {AdminUserWithStatsDto} from './admin.dto';
 
-class AdminService {
-    constructor(private userRepository: AdminRepository) {}
+export class AdminService {
+    constructor(private userRepository: Partial<AdminRepository> | any) {}
 
 
     public getUsers(param: {
-        type_query?: string;
-        role?: "all" | "student" | "staff" | "admin";
-        status?: "all" | "Active" | "Inactive";
-        page?: number;
-        limit?: number;
+        type_query?: "accountId" | "fullName" | undefined;
+        role?: "all" | "student" | "staff" | "admin" | undefined;
+        status?: "all" | "Active" | "Inactive" | undefined;
+        page?: number | undefined;
+        limit?: number | undefined;
     }): Promise<AdminUserWithStatsDto[] | any> {
         // TODO
         // Call userRepository.getUsersWithStats with the provided parameters
 
         // Return the result
 
-        return "placeholder"; // Replace with actual implementation
+        return Promise.resolve("placeholder"); // Replace with actual implementation
 
     }
 
     public createUser(params: {
-        accoundId: string;
+        accountId: string;
         fullName: string;
         password: string;
         role: "student" | "staff" | "admin";
-        yearGroup?: string | null;
+        yearGroup?: string | null | undefined;
     }): Promise<AdminUserWithStatsDto | any> {
         // TODO
         // call userRepository.createUser with the provided parameters
@@ -35,7 +35,7 @@ class AdminService {
 
         // If successful, return the created user with stats
 
-        return "placeholder"; // Replace with actual implementation
+        return Promise.resolve("placeholder"); // Replace with actual implementation
 
 
     }
@@ -44,7 +44,7 @@ class AdminService {
         id: string; //User _id or accountId
         fullName: string;
         role: "student" | "staff" | "admin";
-        yearGroup: string | null;
+        yearGroup?: string | null | undefined;
         status: "Active" | "Inactive";
     }): Promise<AdminUserWithStatsDto | any> {
         // TODO
@@ -54,7 +54,7 @@ class AdminService {
 
         // If successful, return the updated user with stats
 
-        return "placeholder"; // Replace with actual implementation
+        return Promise.resolve("placeholder"); // Replace with actual implementation
     }
 
     public resetUserPassword(params: {

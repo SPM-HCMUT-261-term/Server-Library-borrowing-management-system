@@ -10,9 +10,11 @@
     "build": "tsc && tsc-alias",
     "start": "node dist/server.js",
     "test": "node src/server.ts",
-    "clear": "node delete.js"
+    "clear": "node delete.js",
+    "generate-keys": "node .bin/crypto.js"
   },
   "devDependencies": {
+    "@types/connect-pg-simple": "^7.0.3",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.6",
     "@types/nodemailer": "^8.0.2",
@@ -22,6 +24,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "connect-pg-simple": "^10.0.0",
     "express": "^5.3.0",
     "nodemailer": "^10.3.1",
     "pg": "^8.23.1",

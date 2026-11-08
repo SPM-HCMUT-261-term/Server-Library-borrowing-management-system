@@ -2,8 +2,8 @@ import type {AuthRepository} from "./repositories/auth.repository.interface";
 
 
 
-class AuthService {
-    constructor(private userRepository: AuthRepository) {}
+export class AuthService {
+    constructor(private userRepository: AuthRepository | any) {}
 
     public async login(params: { 
         accountId: string; 
