@@ -3,6 +3,7 @@ export class AuthUserEntity {
         public _id: string,
         public accountId: string,
         public fullName: string,
+        public password_hash: string,
         public initials: string,
         public role: string,
         public status: string,

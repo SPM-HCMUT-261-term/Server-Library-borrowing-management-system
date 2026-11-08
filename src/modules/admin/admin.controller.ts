@@ -6,8 +6,9 @@ import { pool } from '@shared/database/db';
 // import { AdminRepository } from "./repositories/admin.repository.interface";
 
 
+import { AdminRepositoryImpl } from "./repositories/admin.repository";
 import { AdminService } from "./admin.service";
-import { parentPort } from "node:worker_threads";
+
 
 const roleSchema = z.enum(["student", "staff", "admin"]);
 const idSchema = z.string().trim().min(1, "id is required");
@@ -80,7 +81,7 @@ function sendValidationError(res: Response, error: z.ZodError): void {
   });
 }
 
-let adminRepository: any = null;
+let adminRepository: AdminRepositoryImpl = new AdminRepositoryImpl(pool);
 const adminService = new AdminService(adminRepository);
 
 

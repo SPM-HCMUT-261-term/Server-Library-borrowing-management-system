@@ -35,5 +35,5 @@ export interface AdminRepository {
 
     deleteUser(params: {
         id: string //User _id or accountId
-    }): Promise<"not_found" | "has_loan_history">;
+    }): Promise<"not_found" | "has_loan_history" | "deleted">; 
 }
