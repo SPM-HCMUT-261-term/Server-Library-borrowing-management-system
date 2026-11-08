@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 
 
@@ -40,4 +41,12 @@ server.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+=======
+import { app } from './app.js';
+
+const PORT = 3000;
+
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+>>>>>>> origin/main
 });
