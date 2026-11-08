@@ -12,7 +12,6 @@ const loginRequestSchema = z.object({
   })
 });
 
-const userIdSchema = z.coerce.number().int().positive("Authenticated user id is invalid");
 
 type ServiceError = Error & { code?: string };
 
