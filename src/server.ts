@@ -20,9 +20,11 @@ const PORT: number | undefined = parseInt(process.env.PORT as string) || 3000;
 const server: Express = express();
 
 server.use(express.json());
-server.use(sessionMiddleware)
 
 server.post('/login', login);
+
+server.use(sessionMiddleware)
+
 server.use('/auth', verificationMiddleware, authRouter);
 server.use('/admin', verificationMiddleware, adminRouter);
 

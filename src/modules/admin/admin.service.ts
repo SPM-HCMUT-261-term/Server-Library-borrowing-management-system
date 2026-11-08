@@ -1,5 +1,7 @@
 import type { AdminRepository } from "./repositories/admin.repository.interface";
 import type { AdminUserWithStatsDto } from "./admin.dto";
+import { hashPassword } from "@shared/utils/password.util";
+
 
 type ServiceError = Error & { code: string };
 function serviceError(code: string, message: string): ServiceError {

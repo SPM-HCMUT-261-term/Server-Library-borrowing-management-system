@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { AppError } from '@shared/utils/errors';   
+import { AppError } from '@shared/utils/errors.util';   
 
 
 export const verificationMiddleware = (req: Request, res: Response, next: NextFunction) => {

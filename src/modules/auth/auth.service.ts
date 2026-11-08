@@ -1,33 +1,14 @@
 import type { AuthRepository } from "./repositories/auth.repository.interface";
-import { scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
+
+import { verifyPassword } from "@shared/utils/password.util";
 
 type ServiceError = Error & { code: string };
 function serviceError(code: string, message: string): ServiceError {
     return Object.assign(new Error(message), { code });
 }
 
-async function verifyPassword(
-    password: string,
-    hash: unknown,
-): Promise<boolean> {
-    if (typeof hash !== "string") return false;
-    const parts = hash.split(":");
-    if (
-        parts.length !== 3 ||
-        parts[0] !== "scrypt" ||
-        !parts[1] ||
-        !/^(?:[a-f0-9]{2})+$/i.test(parts[2] ?? "")
-    )
-        return false;
-    const expected = Buffer.from(parts[2]!, "hex");
-    const calculated = (await promisify(scryptCallback)(
-        password,
-        parts[1],
-        expected.length,
-    )) as Buffer;
-    return timingSafeEqual(expected, calculated);
-}
+
 
 export class AuthService {
     constructor(private userRepository: AuthRepository | any) {}
@@ -89,7 +70,7 @@ export class AuthService {
         // Verify password; AuthUserEntity currently lacks passwordHash.
         // Repository must expose a hash to enable successful authentication.
         const credential = user as typeof user & { passwordHash?: string };
-        if (!(await verifyPassword(params.password, credential.passwordHash))) {
+        if (!(await verifyPassword(credential.passwordHash, params.password))) {
             throw serviceError(
                 "INVALID_CREDENTIALS",
                 "Invalid account ID or password",
