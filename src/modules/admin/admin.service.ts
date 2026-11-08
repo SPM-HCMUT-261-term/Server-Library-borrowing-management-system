@@ -1,9 +1,13 @@
-import type {AdminRepository} from "./repositories/admin.repository.interface";
-import type {AdminUserWithStatsDto} from './admin.dto';
+import type { AdminRepository } from "./repositories/admin.repository.interface";
+import type { AdminUserWithStatsDto } from "./admin.dto";
+
+type ServiceError = Error & { code: string };
+function serviceError(code: string, message: string): ServiceError {
+    return Object.assign(new Error(message), { code });
+}
 
 export class AdminService {
     constructor(private userRepository: Partial<AdminRepository> | any) {}
-
 
     public getUsers(param: {
         type_query?: "accountId" | "fullName" | undefined;
@@ -14,11 +18,42 @@ export class AdminService {
     }): Promise<AdminUserWithStatsDto[] | any> {
         // TODO
         // Call userRepository.getUsersWithStats with the provided parameters
-
+        const page = param.page ?? 1;
+        const limit = param.limit ?? 10;
+        if (
+            !Number.isInteger(page) ||
+            page < 1 ||
+            !Number.isInteger(limit) ||
+            limit < 1
+        ) {
+            throw serviceError("BAD_REQUEST", "Invalid pagination parameters");
+        }
+        return this.userRepository
+            .getUsersWithStats({
+                type_query: param.type_query,
+                role: param.role === "all" ? undefined : param.role,
+                status: param.status,
+                page,
+                limit,
+            })
+            .then(
+                ({
+                    usersWithStats,
+                    totalItem,
+                }: {
+                    usersWithStats: AdminUserWithStatsDto[];
+                    totalItem: number;
+                }) => ({
+                    items: usersWithStats,
+                    pagination: {
+                        totalItems: totalItem,
+                        currentPage: page,
+                        totalPages: Math.ceil(totalItem / limit),
+                        limit,
+                    },
+                }),
+            );
         // Return the result
-
-        return Promise.resolve("placeholder"); // Replace with actual implementation
-
     }
 
     public createUser(params: {
@@ -30,14 +65,25 @@ export class AdminService {
     }): Promise<AdminUserWithStatsDto | any> {
         // TODO
         // call userRepository.createUser with the provided parameters
-
         // If accountId already exists, return an error
-
         // If successful, return the created user with stats
-
-        return Promise.resolve("placeholder"); // Replace with actual implementation
-
-
+        return this.userRepository
+            .createUserWithStats({
+                accountId: params.accountId,
+                fullName: params.fullName,
+                password: params.password,
+                role: params.role,
+                yearGroup: params.yearGroup ?? null,
+            })
+            .then((created: AdminUserWithStatsDto | null) => {
+                if (!created) {
+                    throw serviceError(
+                        "DUPLICATE_ACCOUNT_ID",
+                        "Account ID already exists",
+                    );
+                }
+                return created;
+            });
     }
 
     public updateUser(params: {
@@ -53,8 +99,17 @@ export class AdminService {
         // If user not found, throw an error
 
         // If successful, return the updated user with stats
-
-        return Promise.resolve("placeholder"); // Replace with actual implementation
+        return this.userRepository
+            .updateUserWithStats({
+                ...params,
+                yearGroup: params.yearGroup ?? null,
+            })
+            .then((updated: AdminUserWithStatsDto | null) => {
+                if (!updated) {
+                    throw serviceError("USER_NOT_FOUND", "User not found");
+                }
+                return updated;
+            });
     }
 
     public resetUserPassword(params: {
@@ -67,11 +122,16 @@ export class AdminService {
         // If user not found, throw an error
 
         // If successful, return true
-
-        return Promise.resolve(); // Replace with actual implementation
+        return this.userRepository
+            .resetUserPassword(params)
+            .then((success: boolean) => {
+                if (!success) {
+                    throw serviceError("USER_NOT_FOUND", "User not found");
+                }
+            });
     }
 
-/*
+    /*
 Request Params:
 + id: string (User _id or accountId)
 */
@@ -83,8 +143,18 @@ Request Params:
 
         // If user has loan history, throw an error
 
-        return Promise.resolve();
-
+        return this.userRepository
+            .deleteUser({ id })
+            .then((result: "not_found" | "has_loan_history") => {
+                if (result === "not_found") {
+                    throw serviceError("USER_NOT_FOUND", "User not found");
+                }
+                if (result === "has_loan_history") {
+                    throw serviceError(
+                        "USER_HAS_LOAN_HISTORY",
+                        "Cannot delete user with borrowing history",
+                    );
+                }
+            });
     }
-
 }
