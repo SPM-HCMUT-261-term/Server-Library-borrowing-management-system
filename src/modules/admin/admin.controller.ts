@@ -2,12 +2,12 @@ import type { Request, Response } from "express";
 import z from "zod";
 
 
-import { pool } from '@shared/database/db';
+import { pool } from '@shared/database/db.js';
 // import { AdminRepository } from "./repositories/admin.repository.interface";
 
 
-import { AdminRepositoryImpl } from "./repositories/admin.repository";
-import { AdminService } from "./admin.service";
+import { AdminRepositoryImpl } from "./repositories/admin.repository.js";
+import { AdminService } from "./admin.service.js";
 
 
 const roleSchema = z.enum(["student", "staff", "admin"]);
@@ -23,7 +23,8 @@ const usersQuerySchema = z.object({
 
 const createUserSchema = z.object({
   accountId: z.string().trim().min(1, "accountId is required"),
-  fullName: z.string().trim().min(1, "fullName is required"),
+  fullName: z.string().trim().min(1, "fullName is required").
+    regex(/^[a-zA-ZÀ-ỹ\s]+$/, "fullName must only contain letters and spaces in English and Vietnamese"),
   password: z.string().min(1, "password is required"),
   role: roleSchema,
   yearGroup: z.string().trim().nullable().optional()

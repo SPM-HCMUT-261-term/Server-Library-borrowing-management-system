@@ -1,6 +1,13 @@
-import { type AdminRepository } from "./admin.repository.interface";
-import type { AdminUserWithStatsEntity } from "../admin.entity";
+import { type AdminRepository } from "./admin.repository.interface.js";
+import type { AdminUserWithStatsEntity } from "../admin.entity.js";
 import PG, { Pool } from "pg";
+
+
+function initialsFromName(fullName: string): string {
+    const parts = fullName.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "";
+    return `${parts[0]?.[0] ?? ""}${parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : ""}`.toUpperCase();
+}
 
 
 export class AdminRepositoryImpl implements AdminRepository {
@@ -18,40 +25,39 @@ export class AdminRepositoryImpl implements AdminRepository {
         try {
             let query = `
                 select 
-                    u.id as _id,
-                    u.account_id as accountId,
-                    u.full_name as fullName,
-                    u.initials as initials,
+                    u.id::text as "_id",
+                    u.account_id as "accountId",
+                    u.full_name as "fullName",
                     u.role as role,
                     u.status as status,
-                    u.year_group as yearGroup,
-                    u.active_loans_count as activeLoansCount,
-                    u.max_loans_limit as maxLoansLimit,
+                    u.year_group as "yearGroup",
+                    u.active_loans_count as "activeLoansCount",
+                    u.max_loans_limit as "maxLoansLimit",
                     (
                         select count(l.id) 
                         from loans l 
                         where l.student_id = u.id 
                              and l.status = 'Active'
                              and l.due_date < CURRENT_DATE
-                    ) as overdueLoansCount,
+                    ) as "overdueLoansCount",
                     (
                         select count(f.id)
                         from fines f
                         where f.student_id = u.id
                               and f.paid_at is null
-                    ) as unpaidFinesCount,
+                    ) as "unpaidFinesCount",
                     (
                         select h.id
                         from holds h
                         where h.student_id = u.id
                         limit 1
-                    ) as activeHoldId,
-                    u.created_at as createdAt,
-                    u.updated_at as updatedAt
+                    ) as "hasBorrowingHistory",
+                    u.created_at::text as "createdAt",
+                    u.updated_at::text as "updatedAt"
                 from users u
             `
             let paramsArray: any[] = [];
-            let whereStmt: string = 'where ';
+            let whereStmt: string = '';
             let conditionsStmt: string[] = [];
             let countParams: number = 1;
             let orderByStmt: string = '';
@@ -60,10 +66,10 @@ export class AdminRepositoryImpl implements AdminRepository {
 
             if (params.type_query) {
                 if (params.type_query === 'accountId') {
-                    orderByStmt = 'ordered by account_id'
+                    orderByStmt = 'order by "accountId"'
                 }
                 if (params.type_query === 'fullName') {
-                    orderByStmt = 'ordered by full_name'
+                    orderByStmt = 'order by "fullName"'
                 }
             }
             if (params.role) {
@@ -92,14 +98,17 @@ export class AdminRepositoryImpl implements AdminRepository {
                 limitNum *= params.page
             }
 
-            whereStmt += conditionsStmt.join(' and ')
+            whereStmt += conditionsStmt? 'where ' + conditionsStmt.join(' and ') : '';
             paramsArray.push(limitNum)
             limitStmt = `limit $${countParams++}`
 
             query += whereStmt + orderByStmt + limitStmt
 
             const result = (await this.pool.query(query, paramsArray)) as PG.QueryResult<AdminUserWithStatsEntity>;
-
+            result.rows.forEach((row) => {
+                row.initials = initialsFromName(row.fullName);
+                row.hasBorrowingHistory = row.hasBorrowingHistory ? true : false;
+            });
             return {usersWithStats: result.rows, totalItem: result.rowCount as number};
         } catch (error) {
             console.error('Error occurred while fetching users with stats.');
@@ -118,9 +127,42 @@ export class AdminRepositoryImpl implements AdminRepository {
     {
         try {
             let query = `
+            with existing_user as (
                 insert into users (account_id, full_name, password_hash, role, year_group)
                 values ($1, $2, $3, $4, $5)
                 returning *
+            )
+            select 
+                   u.id::text as "_id",
+                    u.account_id as "accountId",
+                    u.full_name as "fullName",
+                    u.role as "role",
+                    u.status as "status",
+                    u.year_group as "yearGroup",
+                    u.active_loans_count as "activeLoansCount",
+                    u.max_loans_limit as "maxLoansLimit",
+                    (
+                        select count(l.id) 
+                        from loans l 
+                        where l.student_id = u.id 
+                             and l.status = 'Active'
+                             and l.due_date < CURRENT_DATE
+                    ) as "overdueLoansCount",
+                    (
+                        select count(f.id)
+                        from fines f
+                        where f.student_id = u.id
+                              and f.paid_at is null
+                    ) as "unpaidFinesCount",
+                    (
+                        select h.id
+                        from holds h
+                        where h.student_id = u.id
+                        limit 1
+                    ) as "hasBorrowingHistory",
+                    u.created_at::text as "createdAt",
+                    u.updated_at::text as "updatedAt"
+            from existing_user u;
             `
             const result = (await this.pool.query(query, [
                 params.accountId, 
@@ -129,6 +171,10 @@ export class AdminRepositoryImpl implements AdminRepository {
                 params.role, 
                 params.yearGroup
             ])) as PG.QueryResult<AdminUserWithStatsEntity>;
+            result.rows.forEach((row) => {
+                row.initials = initialsFromName(row.fullName);
+                row.hasBorrowingHistory = row.hasBorrowingHistory ? true : false;
+            });
             return result.rows[0] || null;
         } catch (error) {
             console.error('Error occurred while creating user with stats.');
@@ -146,10 +192,43 @@ export class AdminRepositoryImpl implements AdminRepository {
     {
         try {
             let query = `
-                update users
-                set full_name = $2, role = $3, year_group = $4, status = $5
-                where id = $1 or account_id = $1
-                returning *
+                with updated_user as (
+                    update users
+                    set full_name = $2, role = $3, year_group = $4, status = $5
+                    where account_id = $1 OR ($1 ~ '^[0-9]+$' AND id = $1::integer)
+                    returning *
+                )
+                select 
+                   u.id::text as "_id",
+                    u.account_id as "accountId",
+                    u.full_name as "fullName",
+                    u.role as "role",
+                    u.status as "status",
+                    u.year_group as "yearGroup",
+                    u.active_loans_count as "activeLoansCount",
+                    u.max_loans_limit as "maxLoansLimit",
+                    (
+                        select count(l.id) 
+                        from loans l 
+                        where l.student_id = u.id 
+                             and l.status = 'Active'
+                             and l.due_date < CURRENT_DATE
+                    ) as "overdueLoansCount",
+                    (
+                        select count(f.id)
+                        from fines f
+                        where f.student_id = u.id
+                              and f.paid_at is null
+                    ) as "unpaidFinesCount",
+                    (
+                        select h.id
+                        from holds h
+                        where h.student_id = u.id
+                        limit 1
+                    ) as "hasBorrowingHistory",
+                    u.created_at::text as "createdAt",
+                    u.updated_at::text as "updatedAt"
+                from updated_user u;
             `
             const result = (await this.pool.query(query, [
                 params.id,
@@ -158,6 +237,10 @@ export class AdminRepositoryImpl implements AdminRepository {
                 params.yearGroup,
                 params.status
             ])) as PG.QueryResult<AdminUserWithStatsEntity>;
+            result.rows.forEach((row) => {
+                row.initials = initialsFromName(row.fullName);
+                row.hasBorrowingHistory = row.hasBorrowingHistory ? true : false;
+            });
             return result.rows[0] || null;
         } catch (error) {
             console.error('Error occurred while updating user with stats.');
@@ -174,7 +257,7 @@ export class AdminRepositoryImpl implements AdminRepository {
             let query = `
                 update users
                 set password_hash = $2
-                where id = $1 or account_id = $1
+                where account_id = $1 OR ($1 ~ '^[0-9]+$' AND id = $1::integer)
                 returning *
             `
             const result = (await this.pool.query(query, [
@@ -194,7 +277,7 @@ export class AdminRepositoryImpl implements AdminRepository {
         try {
             // Check if user exists
             const checkUserQuery = `
-                select id from users where id = $1 or account_id = $1
+                select id from users where account_id = $1 OR ($1 ~ '^[0-9]+$' AND id = $1::integer)
             `;
             const checkUserResult = await this.pool.query(checkUserQuery, [params.id]) as PG.QueryResult<{ id: number }>;
             if (checkUserResult.rowCount === 0) {
@@ -202,7 +285,7 @@ export class AdminRepositoryImpl implements AdminRepository {
             }
             // Check if user has loan history
             const checkLoanHistoryQuery = `
-                select id from loans where user_id = $1
+                select id from loans where student_id = $1
             `;
             const checkLoanHistoryResult = await this.pool.query(checkLoanHistoryQuery, [params.id]) as PG.QueryResult<{ id: number }>;
             if (checkLoanHistoryResult.rowCount as number > 0) {
@@ -210,7 +293,7 @@ export class AdminRepositoryImpl implements AdminRepository {
             }
             // Delete the user
             const deleteUserQuery = `
-                delete from users where id = $1 or account_id = $1
+                delete from users where account_id = $1 OR ($1 ~ '^[0-9]+$' AND id = $1::integer)
             `;
             await this.pool.query(deleteUserQuery, [params.id]);
             return "deleted";
@@ -220,5 +303,8 @@ export class AdminRepositoryImpl implements AdminRepository {
         }
     }
 }
+
+
+
 
 

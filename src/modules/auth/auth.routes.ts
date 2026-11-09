@@ -1,6 +1,6 @@
 import Router from "express";
 
-import {getMe, logout } from "./auth.controller";
+import {getMe, logout } from "./auth.controller.js";
 
 export const authRouter = Router();
 

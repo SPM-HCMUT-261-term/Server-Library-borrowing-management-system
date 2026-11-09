@@ -42,9 +42,8 @@
     "paths": {
       "@shared/*": ["./src/shared/*"],
       "@modules/*": ["./src/modules/*"],
-      "@*": ["/"]
+      "*": ["./*"]
     }
   },
-  "include": ["src", ".bin/jwt"],
   "exclude": ["node_modules", "dist"],
 }

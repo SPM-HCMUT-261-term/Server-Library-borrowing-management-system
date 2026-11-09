@@ -1,7 +1,7 @@
-import type { AuthRepository } from "./repositories/auth.repository.interface";
+import type { AuthRepository } from "./repositories/auth.repository.interface.js";
 import { promisify } from "node:util";
 
-import { verifyPassword } from "@shared/utils/password.util";
+import { verifyPassword } from "@shared/utils/password.util.js";
 
 type ServiceError = Error & { code: string };
 function serviceError(code: string, message: string): ServiceError {
@@ -11,14 +11,14 @@ function serviceError(code: string, message: string): ServiceError {
 
 
 export class AuthService {
-    constructor(private userRepository: AuthRepository | any) {}
+    constructor(private userRepository: AuthRepository) {}
 
     public async login(params: {
         accountId: string;
         password: string;
         role: "student" | "staff" | "admin";
     }): Promise<
-        | {
+        {
               accessToken: string;
               sessionToken: string;
               user: {
@@ -33,7 +33,6 @@ export class AuthService {
                   maxLoansLimit: number;
               };
           }
-        | any
     > {
         //TODO
         //find user by accountId
@@ -69,8 +68,7 @@ export class AuthService {
 
         // Verify password; AuthUserEntity currently lacks passwordHash.
         // Repository must expose a hash to enable successful authentication.
-        const credential = user as typeof user & { passwordHash?: string };
-        if (!(await verifyPassword(credential.passwordHash, params.password))) {
+        if (!(await verifyPassword(user.password_hash, params.password))) {
             throw serviceError(
                 "INVALID_CREDENTIALS",
                 "Invalid account ID or password",

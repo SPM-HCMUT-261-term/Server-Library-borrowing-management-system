@@ -1,7 +1,7 @@
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 
-import { pool } from "@shared/database/db";
+import { pool } from "@shared/database/db.js";
 
 declare module 'express-session' {
     interface SessionData {
@@ -30,7 +30,9 @@ export const sessionMiddleware = session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24h
+    maxAge: 24 * 60 * 60 * 1000, // 24h
+    path: '/api/v1',
+    sameSite: 'lax'
   }
 });
 

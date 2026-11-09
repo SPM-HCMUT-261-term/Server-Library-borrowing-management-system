@@ -1,4 +1,4 @@
-import type { AdminUserWithStatsEntity } from "../admin.entity";
+import type { AdminUserWithStatsEntity } from "../admin.entity.js";
 export interface AdminRepository {
     /* Query operations */
     getUsersWithStats(

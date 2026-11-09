@@ -1,7 +1,7 @@
 import type { Pool, QueryResultRow } from "pg";
 
-import { AuthUserEntity, AuthUserWithStatsEntity } from "../auth.entity";
-import type { AuthRepository } from "./auth.repository.interface";
+import { AuthUserEntity, AuthUserWithStatsEntity } from "../auth.entity.js";
+import type { AuthRepository } from "./auth.repository.interface.js";
 
 interface AuthUserRow extends QueryResultRow {
     id: string;
@@ -55,12 +55,7 @@ export class AuthRepositoryImpl implements AuthRepository {
                     u.role AS "role",
                     u.status AS "status",
                     u.year_group AS "yearGroup",
-                    (
-                        SELECT COUNT(*)::int
-                        FROM borrow_records AS br
-                        WHERE br.student_id = u.id
-                          AND br.status = 'Active'
-                    ) AS "activeLoansCount",
+                    u.active_loans_count AS "activeLoansCount",
                     u.max_loans_limit AS "maxLoansLimit"
                 FROM users AS u
                 WHERE u.account_id = $1
@@ -68,7 +63,6 @@ export class AuthRepositoryImpl implements AuthRepository {
             `,
             [accountId],
         );
-
         const row = result.rows[0];
         if (!row) return null;
 

@@ -1,7 +1,10 @@
 import type { Request, Response } from "express";
 import z from "zod";
 
-import { AuthService } from "./auth.service";
+import { pool } from "@shared/database/db.js"
+import { AuthRepositoryImpl } from "./repositories/auth.repository.js";
+import { AuthService } from "./auth.service.js";
+
 
 
 const loginRequestSchema = z.object({
@@ -30,7 +33,6 @@ function sendServiceError(res: Response, error: unknown): void {
     USER_NOT_FOUND: { status: 404, message: "User not found" }
   };
   const response = serviceError.code ? responses[serviceError.code] : undefined;
-
   if (!response) {
     res.status(500).json({
       success: false,
@@ -50,7 +52,8 @@ type AuthenticatedRequest = Request & {
 };
 
 
-const authService: AuthService = new AuthService(null); 
+const authRepository = new AuthRepositoryImpl(pool);
+const authService: AuthService = new AuthService(authRepository); 
 
 export async function login(req: Request, res: Response): Promise<void> {
   const parsed = loginRequestSchema.safeParse(req.body);

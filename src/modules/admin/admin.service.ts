@@ -1,7 +1,7 @@
-import type { AdminRepository } from "./repositories/admin.repository.interface";
-import type { AdminUserWithStatsDto } from "./admin.dto";
+import type { AdminRepository } from "./repositories/admin.repository.interface.js";
+import type { AdminUserWithStatsDto } from "./admin.dto.js";
 
-import { hashPassword } from "@shared/utils/password.util";
+import { hashPassword } from "@shared/utils/password.util.js";
 
 
 type ServiceError = Error & { code: string };

@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { AppError } from '@shared/utils/errors.util';   
+import { AppError } from '@shared/utils/errors.util.js';   
 
 
 export const verificationMiddleware = (req: Request, res: Response, next: NextFunction) => {
@@ -7,7 +7,10 @@ export const verificationMiddleware = (req: Request, res: Response, next: NextFu
     if (req.session.accountId 
         && req.session._id 
         && req.session.role 
-        && req.session.role in ["admin", "student", "staff"]) {
+        && (req.session.role === "admin"
+        || req.session.role === "student"
+        || req.session.role === "staff")
+      ) {
       next();
     } else {
       const error = new AppError(false, {

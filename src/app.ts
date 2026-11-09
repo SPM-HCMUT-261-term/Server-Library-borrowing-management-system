@@ -1,9 +1,9 @@
-import express from 'express';
-import authRouter from './modules/auth/auth.controller.js';
+// import express from 'express';
+// import { authRouter } from './modules/auth/auth.controller.js';
 
-const app = express();
-app.use(express.json());
+// const app = express();
+// app.use(express.json());
 
-app.use('/auth', authRouter);
+// app.use('/auth', authRouter);
 
-export { app };
+// export { app };
