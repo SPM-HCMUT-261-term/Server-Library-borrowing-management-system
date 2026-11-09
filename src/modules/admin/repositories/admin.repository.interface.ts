@@ -10,8 +10,11 @@ export interface AdminRepository {
             limit?: number;
         }
     ): Promise<{usersWithStats: AdminUserWithStatsEntity[]; totalItem: number}>;
+    // when receive QueryResult, perform mapping from QueryResult rows to Entity[] (AdminUserWithStatsEntity[]).
+    // when receive QueryResult, perform mapping from QueryResult rows to Entity[] (AdminUserWithStatsEntity[]).
 
     getUserWithStatsById(id: string): Promise<AdminUserWithStatsEntity | null>;
+    // when receive QueryResult, perform mapping from QueryResult to Entity (AdminUserWithStatsEntity). Returns null if user not found.
 
     getUserById(id: string): Promise<AdminUserEntity | null>; //returns null if user not found
 
