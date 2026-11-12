@@ -13,7 +13,7 @@ export class AdminService {
     constructor(private userRepository: Partial<AdminRepository> | any) {}
 
     public getUsers(param: {
-        type_query?: "accountId" | "fullName" | undefined;
+        q?: string | undefined;
         role?: "all" | "student" | "staff" | "admin" | undefined;
         status?: "all" | "Active" | "Inactive" | undefined;
         page?: number | undefined;
@@ -33,9 +33,9 @@ export class AdminService {
         }
         return this.userRepository
             .getUsersWithStats({
-                type_query: param.type_query,
+                q: param.q,
                 role: param.role === "all" ? undefined : param.role,
-                status: param.status,
+                status: param.status === "all" ? undefined : param.status,
                 page,
                 limit,
             })
