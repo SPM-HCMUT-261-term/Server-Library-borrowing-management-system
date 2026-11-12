@@ -16,7 +16,7 @@ interface AuthUserRow extends QueryResultRow {
 }
 
 interface AuthUserWithStatsRow extends QueryResultRow {
-    id: string;
+    _id: string;
     accountId: string;
     fullName: string;
     role: string;
@@ -86,7 +86,7 @@ export class AuthRepositoryImpl implements AuthRepository {
         const result = await this.pool.query<AuthUserWithStatsRow>(
             `
                 SELECT
-                    u.id::text AS "id",
+                    u.id::text AS "_id",
                     u.account_id AS "accountId",
                     u.full_name AS "fullName",
                     u.role AS "role",
@@ -94,17 +94,17 @@ export class AuthRepositoryImpl implements AuthRepository {
                     u.year_group AS "yearGroup",
                     (
                         SELECT COUNT(*)::int
-                        FROM borrow_records AS br
-                        WHERE br.student_id = u.id
-                          AND br.status = 'Active'
+                        FROM loans AS l
+                        WHERE l.student_id = u.id
+                          AND l.status = 'Active'
                     ) AS "activeLoansCount",
                     u.max_loans_limit AS "maxLoansLimit",
                     (
                         SELECT COUNT(*)::int
-                        FROM borrow_records AS br
-                        WHERE br.student_id = u.id
-                          AND br.status = 'Active'
-                          AND br.due_date < CURRENT_DATE
+                        FROM loans AS l
+                        WHERE l.student_id = u.id
+                          AND l.status = 'Active'
+                          AND l.due_date < CURRENT_DATE
                     ) AS "overdueLoansCount",
                     COALESCE((
                         SELECT SUM(f.amount)
@@ -115,8 +115,8 @@ export class AuthRepositoryImpl implements AuthRepository {
                     (
                         EXISTS (
                             SELECT 1
-                            FROM borrow_records AS br
-                            WHERE br.student_id = u.id
+                            FROM loans AS l
+                            WHERE l.student_id = u.id
                         )
                         OR EXISTS (
                             SELECT 1
@@ -137,7 +137,7 @@ export class AuthRepositoryImpl implements AuthRepository {
         if (!row) return null;
 
         return new AuthUserWithStatsEntity(
-            row.id,
+            row._id,
             row.accountId,
             row.fullName,
             initialsFromName(row.fullName),
