@@ -10,10 +10,10 @@ function serviceError(code: string, message: string): ServiceError {
 }
 
 export class AdminService {
-    constructor(private userRepository: Partial<AdminRepository> | any) {}
+    constructor(private userRepository: AdminRepository) {}
 
     public getUsers(param: {
-        type_query?: "accountId" | "fullName" | undefined;
+        q?: string | undefined;
         role?: "all" | "student" | "staff" | "admin" | undefined;
         status?: "all" | "Active" | "Inactive" | undefined;
         page?: number | undefined;
@@ -33,7 +33,7 @@ export class AdminService {
         }
         return this.userRepository
             .getUsersWithStats({
-                type_query: param.type_query,
+                q: param.q,
                 role: param.role === "all" ? undefined : param.role,
                 status: param.status === "all" ? undefined : param.status,
                 page,
@@ -148,7 +148,7 @@ Request Params:
 
         return this.userRepository
             .deleteUser({ id })
-            .then((result: "not_found" | "has_loan_history") => {
+            .then((result: "not_found" | "has_loan_history" | "deleted") => {
                 if (result === "not_found") {
                     throw serviceError("USER_NOT_FOUND", "User not found");
                 }
