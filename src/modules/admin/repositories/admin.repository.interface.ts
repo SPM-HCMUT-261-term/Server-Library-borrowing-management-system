@@ -3,9 +3,9 @@ export interface AdminRepository {
     /* Query operations */
     getUsersWithStats(
         params: {
-            type_query?: "accountId" | "fullName";
-            role?: "student" | "staff" | "admin";
-            status?: "Active" | "Inactive" | "all";
+            q?: string | undefined;
+            role?: "student" | "staff" | "admin" |  undefined;
+            status?: "Active" | "Inactive" | "all" | undefined;
             page?: number;
             limit?: number;
         }

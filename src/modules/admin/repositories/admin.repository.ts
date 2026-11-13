@@ -90,9 +90,9 @@ export class AdminRepositoryImpl implements AdminRepository {
     constructor(private readonly pool: Pool) {}
 
     async getUsersWithStats(params: {
-        q?: string;
-        role?: "student" | "staff" | "admin";
-        status?: "Active" | "Inactive";
+        q?: string | undefined;
+        role?: "student" | "staff" | "admin" | undefined;
+        status?: "Active" | "Inactive" | undefined;
         page?: number;
         limit?: number;
     }): Promise<{ usersWithStats: AdminUserWithStatsEntity[]; totalItem: number }> {

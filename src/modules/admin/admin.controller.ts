@@ -14,7 +14,7 @@ const roleSchema = z.enum(["student", "staff", "admin"]);
 const idSchema = z.string().trim().min(1, "id is required");
 
 const usersQuerySchema = z.object({
-  q: z.enum(["accountId", "fullName"]).optional(),
+  q: z.string().optional(),
   role: z.enum(["all", "student", "staff", "admin"]).optional(),
   status: z.enum(["all", "Active", "Inactive"]).optional(),
   page: z.coerce.number().int().positive().optional(),
@@ -115,7 +115,7 @@ export async function getUsers(req: Request, res: Response): Promise<void> {
   try {
     const data = await adminService.getUsers(
       {
-        type_query: parsed.data.q,
+        q: parsed.data.q,
         role: parsed.data.role,
         status: parsed.data.status,
         page: parsed.data.page,
