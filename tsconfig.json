@@ -9,7 +9,7 @@
     // See also https://aka.ms/tsconfig/module
     "module": "esnext",
     "target": "es2025",
-    "types": ["node"],
+    "types": ["node", "vitest/globals"],
     // For nodejs:
     "lib": ["ES2025"],
     // "types": ["node"],

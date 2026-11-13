@@ -1,31 +1,28 @@
 # Library Borrowing Management System
 
-Backend service for a school library borrowing management system. The project is
-implemented with TypeScript and Express and is currently focused on
-authentication, session management, administrator account management, and the
-database foundation for books and borrowing workflows.
+Backend service for the Westbridge School library borrowing management system.
+This branch is a TypeScript and Express implementation of the authentication
+and user-account administration foundation. The database schema also defines
+the catalog, physical-copy, hold, loan, fine, and notification domain for
+future modules.
 
-## Project status
+## Current implementation
 
-This branch contains the authentication and administrator features. The
-database schema already models the wider borrowing domain, while book
-inventory, borrowing, fines, and notifications are prepared for future
-implementation.
+The server currently provides:
 
-Implemented or wired at the HTTP layer:
+- Account login with `accountId`, password, and role validation.
+- PostgreSQL-backed, session-cookie authentication.
+- Authenticated profile lookup and logout.
+- User listing, creation, update, password reset, and deletion handlers for
+  administrator workflows.
+- Zod request validation and structured JSON error responses.
+- Argon2 password hashing and verification.
+- Database initialization and seed execution at server startup.
 
-- User login with account ID, password, and role validation.
-- Session-based authentication using PostgreSQL-backed sessions.
-- Authenticated user profile lookup and logout.
-- Administrator user listing, creation, update, password reset, and deletion
-  endpoints.
-- Request validation with Zod and structured JSON error responses.
-- Password hashing and verification with Argon2.
-
-The service and repository layers still contain TODOs and placeholders in
-several areas. In particular, authentication and administrator services expect
-repository implementations to be connected, and access-token generation is not
-implemented yet.
+The book-inventory module and the wider borrowing workflows are currently
+scaffolded but are not mounted as HTTP routes. The current verification
+middleware checks that a session is authenticated and has a valid role; it does
+not yet restrict the administrator routes to administrator accounts.
 
 ## Technology stack
 
@@ -37,16 +34,16 @@ implemented yet.
 - **Session store:** `express-session` with `connect-pg-simple`
 - **Validation:** Zod
 - **Password security:** Argon2
+- **Email support:** Nodemailer
 - **Development runner:** `tsx`
+- **Testing:** Vitest
 
-## Architecture
-
-The source is organized by feature:
+## Project structure
 
 ```text
 src/
-├── app.ts
 ├── server.ts
+├── app.ts
 ├── modules/
 │   ├── auth/
 │   │   ├── auth.controller.ts
@@ -64,6 +61,8 @@ src/
 │   │   └── repositories/
 │   └── book-inventories/
 │       ├── book-inventories.controller.ts
+│       ├── book-inventories.dto.ts
+│       ├── book-inventories.entity.ts
 │       ├── book-inventories.routes.ts
 │       ├── book-inventories.service.ts
 │       └── repositories/
@@ -73,21 +72,24 @@ src/
     └── utils/
 ```
 
-Controllers validate HTTP input and format responses. Services contain
-business logic, repositories isolate database access, and shared middleware
+Controllers handle HTTP parsing and response formatting. Services contain
+business logic, repositories isolate PostgreSQL access, and shared middleware
 provides sessions and authentication checks.
 
 ## HTTP API
 
-The server reads the port from `PORT` and defaults to `3000`.
+The current base URL is `/api/v1`. JSON requests must use
+`Content-Type: application/json`.
 
-### Public endpoint
+### Authentication
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/login` | Validate credentials and create an authenticated session. |
+| Method | Path | Access | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/auth/login` | Public | Validate credentials and create a session. |
+| `GET` | `/api/v1/auth/me` | Authenticated | Return the current user profile and borrowing statistics. |
+| `POST` | `/api/v1/auth/logout` | Authenticated | Destroy the current session. |
 
-Example request:
+Login request:
 
 ```json
 {
@@ -97,30 +99,27 @@ Example request:
 }
 ```
 
-### Authenticated user endpoints
+The accepted roles are `student`, `staff`, and `admin`. Successful login
+stores the user ID, account ID, name, and role in the server-side session.
+Clients must retain and send the session cookie on subsequent requests.
 
-These routes are mounted under `/auth` and require a valid session.
+### User administration
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/auth/me` | Return the current user's profile and borrowing statistics. |
-| `POST` | `/auth/logout` | Destroy the current session. |
+| Method | Path | Access | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/admin/users` | Authenticated | List users with optional filters and pagination. |
+| `POST` | `/api/v1/admin/users` | Authenticated | Create a user account. |
+| `PUT` | `/api/v1/admin/users/:id` | Authenticated | Update a user's profile, role, year group, or status. |
+| `POST` | `/api/v1/admin/users/:id/reset-password` | Authenticated | Reset a user’s password. |
+| `DELETE` | `/api/v1/admin/users/:id` | Authenticated | Delete a user when borrowing history permits it. |
 
-### Administrator endpoints
+The user-list query supports `type_query`, `role`, `status`, `page`, and
+`limit`. User roles are `student`, `staff`, and `admin`; user statuses are
+`Active` and `Inactive`.
 
-These routes are mounted under `/admin` and require a valid authenticated
-session. Administrator-role authorization should be completed as part of the
-remaining access-control work.
+### Response format
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/admin` | List users with optional filters and pagination. |
-| `POST` | `/admin` | Create a user account. |
-| `PUT` | `/admin/:id` | Update a user's profile, role, year group, or status. |
-| `POST` | `/admin/:id/reset-password` | Reset a user's password. |
-| `DELETE` | `/admin/:id` | Delete a user when borrowing history permits it. |
-
-Successful responses generally use the following envelope:
+Successful responses use:
 
 ```json
 {
@@ -129,31 +128,43 @@ Successful responses generally use the following envelope:
 }
 ```
 
-Validation and service failures use a structured `error` object containing a
-machine-readable `code` and a human-readable `message`.
+Some successful operations return a top-level `message` instead of, or in
+addition to, `data`. Validation and service failures use:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid input",
+    "details": {}
+  }
+}
+```
 
 ## Database model
 
 The PostgreSQL schema in `src/shared/database/schema.sql` defines:
 
 - `users` for student, staff, and administrator accounts.
-- `books` for title-level metadata.
-- `physical_copies` for individual library copies.
+- `books` for title metadata.
+- `physical_copies` for individual copies and their condition.
 - `holds` for student reservations.
-- `borrow_records` for checkout and return history.
+- `loans` for checkout and return history.
 - `fines` for overdue, damaged, and lost-book charges.
 - `notifications` for user alerts.
+- `view_book_stock` for derived copy-availability totals.
 
-Database constraints and partial unique indexes prevent conflicting active loans
-or ready holds for the same physical copy. The session middleware creates and
-uses a PostgreSQL `user_sessions` table.
+The session middleware creates and uses the `user_sessions` table through
+`connect-pg-simple`. Foreign keys, checks, indexes, and the stock view enforce
+the database-level rules currently defined in the schema.
 
 ## Configuration
 
-Set the following environment variables before starting the server:
+Set these environment variables before starting the server:
 
 ```text
-PORT=3000
+SERVER_PORT=3000
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=your_database_user
@@ -191,10 +202,119 @@ Start the compiled server:
 npm start
 ```
 
-<!-- ## Related documentation
+Run the test suite:
 
-- [`.bin/API_Contract.md`](./.bin/API_Contract.md) contains the broader
-  planned API contract for catalog, copy, borrowing, staff, and admin
-  workflows.
-- [`src/shared/database/schema.sql`](./src/shared/database/schema.sql) contains
-  the PostgreSQL schema and data-integrity constraints. -->
+```bash
+npm run test:run
+```
+
+## Setting up and running Vitest tests
+
+The repository tests use Vitest and connect directly to PostgreSQL. Follow
+these steps on a new development machine.
+
+### 1. Install the Vitest VS Code extension
+
+Open the **Extensions** view in VS Code, search for **Vitest**, and install the
+Vitest extension. This adds run/debug controls, including a triangle button
+next to `describe(...)` and each `it(...)` test.
+
+### 2. Start PostgreSQL
+
+Use either of these options:
+
+#### Option A: PostgreSQL Docker image
+
+Install Docker Desktop, then run these commands in PowerShell:
+
+```powershell
+docker pull postgres:bookworm
+docker run --name library-postgres `
+  -e POSTGRES_USER=postgres `
+  -e POSTGRES_PASSWORD=postgres `
+  -e POSTGRES_DB=library_db `
+  -p 5432:5432 `
+  -d postgres:bookworm
+```
+
+Apply the project schema:
+
+```powershell
+Get-Content .\src\shared\database\schema.sql |
+  docker exec -i library-postgres psql -U postgres -d library_db
+```
+
+Install pgAdmin separately and create a server connection with:
+
+```text
+Host:     localhost
+Port:     5432
+Database: library_db
+Username: postgres
+Password: postgres
+```
+
+pgAdmin lets you inspect the tables and the changes made by repository tests.
+
+#### Option B: PostgreSQL for Windows
+
+Install PostgreSQL for Windows and select the bundled pgAdmin component during
+installation. Create a database named `library_db`, then run
+`src/shared/database/schema.sql` against it from pgAdmin's Query Tool.
+Use the PostgreSQL username, password, host, port, and database name in the
+test environment file below.
+
+### 3. Configure the test database
+
+Create `.env.test.local` in the repository root. Do not commit this file.
+For the Docker setup above, use:
+
+```text
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=library_db
+SESSION_SECRET_KEY=local-test-secret
+```
+
+Vitest loads this file through `src/setup.ts`. The repository tests truncate
+the application tables and insert their own seed data before each test, so use
+a dedicated test database. Do not point the tests at a database containing
+data that must be preserved.
+
+Install dependencies if needed:
+
+```bash
+npm install
+```
+
+Run all tests from the terminal (optional):
+
+```bash
+npm run test:run
+```
+
+To keep Vitest running in watch mode (optional):
+
+```bash
+npm test
+```
+
+### 4. Run one test from VS Code
+
+Open a test file under `src/`, for example
+`src/modules/admin/repositories/admin.repository.test.ts`. Click the
+triangle button at the beginning of a `describe(...)` or `it(...)` block to
+run that suite or individual test. The result appears in the VS Code testing
+panel and the terminal. The repository tests also print database-operation
+results with `console.log`; inspect those values in the test output and use
+pgAdmin to verify the corresponding database state.
+
+<!-- ## API contract
+
+[`API_Contract.md`](./.temp/API_Contract.md) describes the intended
+28-endpoint API, including catalog, physical-copy, borrowing, hold, staff, and
+admin workflows. The contract is broader than the routes currently mounted by
+this branch; use the current route list above as the source of truth for the
+running server. -->
