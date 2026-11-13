@@ -15,7 +15,7 @@ export class AuthUserEntity {
 
 export class AuthUserWithStatsEntity {
   constructor(
-    public _id: string,
+    public id: string,
     public accountId: string,
     public fullName: string,
     public initials: string,

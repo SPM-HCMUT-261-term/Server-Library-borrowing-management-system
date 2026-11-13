@@ -9,12 +9,12 @@ import { pool } from '@shared/database/db.js';
 import { AdminRepositoryImpl } from "./repositories/admin.repository.js";
 import { AdminService } from "./admin.service.js";
 
-
+// zod schemas for input request validation
 const roleSchema = z.enum(["student", "staff", "admin"]);
 const idSchema = z.string().trim().min(1, "id is required");
 
 const usersQuerySchema = z.object({
-  type_query: z.enum(["accountId", "fullName"]).optional(),
+  q: z.enum(["accountId", "fullName"]).optional(),
   role: z.enum(["all", "student", "staff", "admin"]).optional(),
   status: z.enum(["all", "Active", "Inactive"]).optional(),
   page: z.coerce.number().int().positive().optional(),
@@ -41,6 +41,8 @@ const resetPasswordSchema = z.object({
   newPassword: z.string().min(1, "newPassword is required")
 });
 
+
+// handle service errors and validation errors
 type ServiceError = Error & { code?: string };
 
 function validationDetails(error: z.ZodError): Record<string, string> {
@@ -86,6 +88,22 @@ let adminRepository: AdminRepositoryImpl = new AdminRepositoryImpl(pool);
 const adminService = new AdminService(adminRepository);
 
 
+// controller handlers for admin routes
+
+export async function requireAdmin(req: Request, res: Response, next: () => void): Promise<void> {
+    if (req.session?.role === "admin") {
+        next();
+    } else {
+        res.status(403).json({
+            success: false,
+            error: {
+                code: "FORBIDDEN_ACCESS",
+                message: "Access denied. Only admin are allowed to access this resource."
+            }
+        });
+    }
+}
+
 
 export async function getUsers(req: Request, res: Response): Promise<void> {
   const parsed = usersQuerySchema.safeParse(req.query);
@@ -95,7 +113,15 @@ export async function getUsers(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    const data = await adminService.getUsers(parsed.data);
+    const data = await adminService.getUsers(
+      {
+        type_query: parsed.data.q,
+        role: parsed.data.role,
+        status: parsed.data.status,
+        page: parsed.data.page,
+        limit: parsed.data.limit
+      }
+    );
     res.status(200).json({ success: true, data });
   } catch (error) {
     sendServiceError(res, error);

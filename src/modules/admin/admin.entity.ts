@@ -1,6 +1,6 @@
 export class AdminUserWithStatsEntity {
   constructor(
-    public _id: string,
+    public id: string,
     public accountId: string,
     public fullName: string,
     public initials: string,
