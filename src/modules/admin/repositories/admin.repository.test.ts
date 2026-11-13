@@ -27,7 +27,7 @@ describe("AdminRepository", () => {
     // });
 
     it("lists users with borrowing statistics and total count", async () => {
-        const result = await repository.getUsersWithStats({ type_query: "fullName",page: 1, limit: 10 });
+        const result = await repository.getUsersWithStats({ page: 1, limit: 10 });
         console.log("getUsersWithStats:", result);
     });
 
