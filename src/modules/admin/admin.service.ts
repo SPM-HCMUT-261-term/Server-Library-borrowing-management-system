@@ -35,7 +35,7 @@ export class AdminService {
             .getUsersWithStats({
                 type_query: param.type_query,
                 role: param.role === "all" ? undefined : param.role,
-                status: param.status,
+                status: param.status === "all" ? undefined : param.status,
                 page,
                 limit,
             })
