@@ -74,7 +74,7 @@ export type BookeWithSummaryInfoEntity = {
     description: string | null,
     coverImageUrl: string | null,
     shelfReference: string | null,
-    sectionName: string | null, //????
+    // sectionName: string | null, //????
     stockSummary: {
         totalCopies: number,
         availableCopies: number,
@@ -88,7 +88,23 @@ export type BookeWithSummaryInfoEntity = {
     updatedAt: string
 }
 
+export type BookStockSummaryEntity = {
+    totalCopies: number,
+    availableCopies: number,
+    borrowedCopies: number,
+    reservedCopies: number,
+    damagedCopies: number,
+    lostCopies: number
+}
 
+export type BookViewerContextEntity = {
+    canBorrow: boolean,
+    canRequestHold: boolean,
+    blockReason: string | null,
+    activeLoansCount: number,
+    maxLoansLimit: number,
+    existingHoldCode: string | null
+}
 
 export type PhysicalCopyEntity = {
     _id: string,
@@ -108,17 +124,23 @@ export type PhysicalWithLoanAndHoldStateEntity = PhysicalCopyEntity & {
 }
 
 
-export type AddCopyToBookStockSummaryEntity = {
-    totalCopies: number,
-    availableCopies: number,
-    borrowedCopies: number,
-}
+export type AddCopyToBookStockSummaryEntity = Omit<BookStockSummaryEntity, "reservedCopies" | "damagedCopies" | "lostCopies">
 
-export type UpdateCopyToBookStockSummaryEntity = {
-    totalCopies: number,
-    availableCopies: number,
-    borrowedCopies: number,
-    reservedCopies: number,
-    damagedCopies: number,
-    lostCopies: number,
+
+export type UpdateCopyToBookStockSummaryEntity = BookStockSummaryEntity;
+
+export type PhysicalCopyEntityWithActiveLoanAndHold = PhysicalCopyEntity & {
+    activeLoan: {
+        borrowCode: string,
+        studentName: string,
+        studentAccountId: string,
+        dueDate: string
+    } | null,
+    activeHold: {
+        holdCode: string,
+        studentName: string,
+        studentAccountId: string,
+        collectBy: string
+    } | null
+    hasLoanHistory: boolean, // if true, copy deletion is disabled
 }

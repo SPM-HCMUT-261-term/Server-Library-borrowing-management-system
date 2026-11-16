@@ -30,9 +30,19 @@ class BookInventoriesService {
       // call this.booksRepository.getBooks(...) to return to controller layer
     }
 
-    public getBookById(_id: string): void // not implemented currently bcz of the complexity query
+    
+    public getBookById(
+      _id: string,
+      role: "staff" | "student",
+      studentId: string | null  // userId, not accountId. Null if role is staff
+    ): void // not implemented currently bcz of the complexity query
     {
-
+      // call this.booksRepository.getBooksWithSummaryInfoByIdOrIsbn(...)
+      // If null, throw error Book not found
+      // else call this.physicalCopiesRepository.getPhysicalCopiesByBookIdWithActiveLoanAndHold(...)
+      //      from the bookId from getBooksWithSummaryInfoByIdOrIsbn call
+      // 
+      // pass to getBookByIdResponseDto constructor and call toResponse to filter out the fields (need implemenent getBookByIdResponseDto)
     }
 
     public createBook(_params: {
