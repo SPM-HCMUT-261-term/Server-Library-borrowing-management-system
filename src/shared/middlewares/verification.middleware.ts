@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { AppError } from '@shared/utils/errors.util.js';   
 
 
+
 export const verificationMiddleware = (req: Request, res: Response, next: NextFunction) => {
   if (req?.session) {
     if (req.session.accountId 

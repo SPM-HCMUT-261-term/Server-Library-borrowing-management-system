@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, it } from "vitest";
 import { pool } from "@shared/database/db.js";
 import { AuthRepositoryImpl } from "./auth.repository.js";
 import type { AuthRepository } from "./auth.repository.interface.js";
-import { authSeedAccounts, seedAuthRepositoryData } from "./auth.repository.seed.js";
+import { authSeedAccounts, seedAuthRepositoryData } from "./auth.repository.seed.test.js";
 
 const repository: AuthRepository = new AuthRepositoryImpl(pool);
 
