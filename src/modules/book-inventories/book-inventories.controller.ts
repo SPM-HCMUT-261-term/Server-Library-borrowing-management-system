@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
 import z from "zod";
 
+import { BookInventoriesService } from "./book-inventories.service.js";
+
 const getFeaturedBooksQuerySchema = z.object({
   limit: z.coerce.number().int().positive().optional()
 });
@@ -141,20 +143,222 @@ function handleBookInventoryError(res: Response, error: unknown): void {
   });
 }
 
-export function getFeaturedBooks(_req: Request, _res: Response): void {}
+function validationDetails(error: z.ZodError): Record<string, string> {
+  return Object.fromEntries(
+    error.issues.map((issue) => [issue.path.join("."), issue.message])
+  );
+}
 
-export function getBooks(_req: Request, _res: Response): void {}
+function sendValidationError(res: Response, error: z.ZodError): void {
+  res.status(400).json({
+    success: false,
+    error: {
+      code: "VALIDATION_ERROR",
+      message: "Invalid input",
+      details: validationDetails(error)
+    }
+  });
+}
 
-export function getBookById(_req: Request, _res: Response): void {}
+let booksRepository: any = null;
+let physicalCopiesRepository: any = null;
+const bookInventoriesService = new BookInventoriesService(
+  booksRepository,
+  physicalCopiesRepository
+);
 
-export function createBook(_req: Request, _res: Response): void {}
+export function getFeaturedBooks(_req: Request, _res: Response): void {
+  const parsed = getFeaturedBooksQuerySchema.safeParse(_req.query);
+  if (!parsed.success) {
+    sendValidationError(_res, parsed.error);
+    return;
+  }
 
-export function updateBook(_req: Request, _res: Response): void {}
+  try {
+    const data = bookInventoriesService.getFeaturedBooks({
+      limit: parsed.data.limit
+    });
+    _res.status(200).json({ success: true, data });
+  } catch (error) {
+    handleBookInventoryError(_res, error);
+  }
+}
 
-export function deleteBook(_req: Request, _res: Response): void {}
+export function getBooks(_req: Request, _res: Response): void {
+  const parsed = getBooksQuerySchema.safeParse(_req.query);
+  if (!parsed.success) {
+    sendValidationError(_res, parsed.error);
+    return;
+  }
 
-export function addCopyToBook(_req: Request, _res: Response): void {}
+  try {
+    const data = bookInventoriesService.getBooks({
+      q: parsed.data.q,
+      category: parsed.data.category,
+      genre: parsed.data.genre,
+      language: parsed.data.language,
+      availableNow: parsed.data.availableNow,
+      stock: parsed.data.stock,
+      sortBy: parsed.data.sortBy,
+      page: parsed.data.page,
+      limit: parsed.data.limit
+    });
+    _res.status(200).json({ success: true, data });
+  } catch (error) {
+    handleBookInventoryError(_res, error);
+  }
+}
 
-export function updateCopy(_req: Request, _res: Response): void {}
+export function getBookById(_req: Request, _res: Response): void {
+  const parsed = getBookByIdParamsSchema.safeParse(_req.params);
+  if (!parsed.success) {
+    sendValidationError(_res, parsed.error);
+    return;
+  }
 
-export function deleteCopy(_req: Request, _res: Response): void {}
+  const role: "staff" | "student" =
+    _req.session?.role === "staff" ? "staff" : "student";
+  const studentId = role === "student" ? (_req.session?._id ?? null) : null;
+
+  try {
+    const data = bookInventoriesService.getBookById(
+      parsed.data.id,
+      role,
+      studentId
+    );
+    _res.status(200).json({ success: true, data });
+  } catch (error) {
+    handleBookInventoryError(_res, error);
+  }
+}
+
+export function createBook(_req: Request, _res: Response): void {
+  const parsed = createBookBodySchema.safeParse(_req.body);
+  if (!parsed.success) {
+    sendValidationError(_res, parsed.error);
+    return;
+  }
+
+  try {
+    const data = bookInventoriesService.createBook(parsed.data);
+    _res.status(201).json({ success: true, data });
+  } catch (error) {
+    handleBookInventoryError(_res, error);
+  }
+}
+
+export function updateBook(_req: Request, _res: Response): void {
+  const parsed = updateBookRequestSchema.safeParse({
+    params: _req.params,
+    body: _req.body
+  });
+  if (!parsed.success) {
+    sendValidationError(_res, parsed.error);
+    return;
+  }
+
+  try {
+    const data = bookInventoriesService.updateBookById(
+      parsed.data.params.id,
+      parsed.data.body
+    );
+    _res.status(200).json({ success: true, data });
+  } catch (error) {
+    handleBookInventoryError(_res, error);
+  }
+}
+
+export function deleteBook(_req: Request, _res: Response): void {
+  const parsed = deleteBookParamsSchema.safeParse(_req.params);
+  if (!parsed.success) {
+    sendValidationError(_res, parsed.error);
+    return;
+  }
+
+  try {
+    bookInventoriesService.deleteBookById(parsed.data.id);
+    _res.status(200).json({
+      success: true,
+      message: "Book title deleted successfully"
+    });
+  } catch (error) {
+    handleBookInventoryError(_res, error);
+  }
+}
+
+export function addCopyToBook(_req: Request, _res: Response): void {
+  const parsed = addCopyToBookRequestSchema.safeParse({
+    params: _req.params,
+    body: _req.body
+  });
+  if (!parsed.success) {
+    sendValidationError(_res, parsed.error);
+    return;
+  }
+
+  try {
+    const data = bookInventoriesService.addCopyToBook({
+      bookId: parsed.data.params.bookId,
+      copyCode: parsed.data.body.copyCode ?? "",
+      homeLocation: parsed.data.body.homeLocation,
+      initialState: parsed.data.body.initialState,
+      condition: parsed.data.body.condition,
+      notes: parsed.data.body.notes
+    });
+    _res.status(201).json({ success: true, data });
+  } catch (error) {
+    handleBookInventoryError(_res, error);
+  }
+}
+
+export function updateCopy(_req: Request, _res: Response): void {
+  const parsed = updateCopyRequestSchema.safeParse({
+    params: _req.params,
+    body: _req.body
+  });
+  if (!parsed.success) {
+    sendValidationError(_res, parsed.error);
+    return;
+  }
+
+  const id = parsed.data.params.id;
+  const isNumericId = /^\d+$/.test(id);
+
+  try {
+    const data = bookInventoriesService.updateCopy({
+      copyId: isNumericId ? id : undefined,
+      copyCode: isNumericId ? undefined : id,
+      homeLocation: parsed.data.body.homeLocation,
+      state: parsed.data.body.state,
+      condition: parsed.data.body.condition,
+      notes: parsed.data.body.notes ?? undefined
+    });
+    _res.status(200).json({ success: true, data });
+  } catch (error) {
+    handleBookInventoryError(_res, error);
+  }
+}
+
+export function deleteCopy(_req: Request, _res: Response): void {
+  const parsed = deleteCopyParamsSchema.safeParse(_req.params);
+  if (!parsed.success) {
+    sendValidationError(_res, parsed.error);
+    return;
+  }
+
+  const id = parsed.data.id;
+  const isNumericId = /^\d+$/.test(id);
+
+  try {
+    bookInventoriesService.deleteCopy({
+      copyId: isNumericId ? id : undefined,
+      copyCode: isNumericId ? undefined : id
+    });
+    _res.status(200).json({
+      success: true,
+      message: "Physical copy deleted successfully"
+    });
+  } catch (error) {
+    handleBookInventoryError(_res, error);
+  }
+}
