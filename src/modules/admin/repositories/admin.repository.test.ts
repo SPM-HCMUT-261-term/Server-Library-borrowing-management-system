@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, it } from "vitest";
 import { pool } from "@shared/database/db.js";
 import { AdminRepositoryImpl } from "./admin.repository.js";
 import type { AdminRepository } from "./admin.repository.interface.js";
-import { adminSeedAccounts, seedAdminRepositoryData } from "./admin.repository.seed.js";
+import { adminSeedAccounts, seedAdminRepositoryData } from "./admin.repository.seed.test.js";
 
 const repository: AdminRepository = new AdminRepositoryImpl(pool);
 

@@ -63,3 +63,9 @@ delete.js
 .bin
 
 *.pem
+
+
+*.zip
+
+*-temp-*/
+loans/
