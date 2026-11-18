@@ -13,6 +13,52 @@ import type {
     BookViewerContextEntity
 }  from "../book-inventories.entity";
 
+export interface BookMetadata {
+    title: string;
+    author: string;
+    isbn: string;
+    category: string;
+    keywords?: string[] | undefined;
+    publisher?: string | null | undefined;
+    genre?: string | null | undefined;
+    publishedYear?: number | null | undefined;
+    language?: string | undefined;
+    format?: string | undefined;
+    pageCount?: number | null | undefined;
+    description?: string | null | undefined;
+    coverImageUrl?: string | null | undefined;
+    shelfReference?: string | null | undefined;
+}
+
+export interface UpdateBookParams {
+    title: string;
+    author: string;
+    isbn: string;
+    category: string;
+    publisher?: string | null | undefined;
+    keywords?: string[] | undefined;
+    genre?: string | null | undefined;
+    publishedYear?: number | null | undefined;
+    language?: string | undefined;
+    format?: string | undefined;
+    pageCount?: number | null | undefined;
+    description?: string | null | undefined;
+    coverImageUrl?: string | null | undefined;
+    shelfReference?: string | null | undefined;
+}
+
+export interface GetBooksParams {
+    q?: string;
+    category?: string;
+    genre?: string;
+    language?: string;
+    availableNow?: boolean;
+    stock?: "all" | "available" | "unavailable";
+    sortBy?: "relevance" | "title" | "publishedYear";
+    page?: number;
+    limit?: number;
+}
+
 
 export interface BooksRepository {
     // Keep the name of columns in query result, then map to entity to return to service layer for easier to read code.
@@ -20,16 +66,8 @@ export interface BooksRepository {
     getFeaturedBooks(limit: number): Promise<GetFeaturedBooksResultEntity[]>;
 
     getBooks(
-        type_query?: string | undefined,
-        category_query?: string | undefined,
-        genre_query?: string | undefined,
-        language_query?: string | undefined,
-        availableNow_query?: boolean | undefined,
-        stock_query?: string | undefined,
-        sortBy_query?: string | undefined,
-        page_query?: number | undefined,
-        limit_query?: number | undefined
-    ): Promise<GetBooksResultEntity[]>;
+        params: GetBooksParams
+    ): Promise<{ books: GetBooksResultEntity[]; totalItems: number }>;
 
     getBookById(bookId: string): Promise<BookEntity | null>;
 
@@ -85,26 +123,11 @@ FROM reasoned;
 
 */
     // CUD methods
-    createBook(params: {
-        title: string;
-        author: string;
-        isbn: string;
-        category: string;
-        keywords?: string[] | undefined;
-        publisher?: string | undefined;
-        genre?: string | undefined;
-        publishedYear?: number | undefined;
-        language?: string | undefined;
-        format?: string | undefined;
-        pageCount?: number | undefined;
-        description?: string | undefined;
-        coverImageUrl?: string | undefined;
-        shelfReference?: string | undefined;
-    }): Promise<BookEntity | null>;
+    createBook(params: BookMetadata): Promise<BookEntity | null>;
     // Return Entity if success, else null.
 
 
-    updateBookById(bookId: string): Promise<BookEntity | null>;
+    updateBookById(bookId: string, params: UpdateBookParams): Promise<BookEntity | null>;
     // Return Entity if success, else null. 
 
     deleteBookById(bookId: string): Promise<BookEntity | null>;
@@ -202,7 +225,7 @@ CREATE INDEX idx_holds_copy_status ON holds(copy_id, status);
         homeLocation: string;
         state: "Available" | "Damaged" | "Lost";
         condition: "Good" | "Damaged" | "Lost";
-        notes?: string | undefined;
+        notes?: string | null | undefined;
     }): Promise<PhysicalCopyEntity | null>;
     // Return Entity if success, else null.
 
