@@ -1,400 +1,415 @@
-import type { BooksRepository, PhysicalCopiesRepository } from "./repositories/book-inventories.repository.interface.js";
 import type {
-    GetFeaturedBooksResultEntity,
-    GetBooksResultEntity,
-    BookEntity,
-    BookeWithSummaryInfoEntity,
-    PhysicalCopyEntity,
-    AddCopyToBookStockSummaryEntity,
-    UpdateCopyToBookStockSummaryEntity
-} from "./book-inventories.entity.js";
+    BooksRepository,
+    PhysicalCopiesRepository,
+} from "./repositories/book-inventories.repository.interface";
 
-type ServiceError = Error & { code: string };
-function serviceError(code: string, message: string): ServiceError {
-    return Object.assign(new Error(message), { code });
+import { GetBookByIdResponseDto } from "./book-inventories.dto.js";
+type ServiceError = Error & { code: string; details?: unknown };
+function serviceError(
+    code: string,
+    message: string,
+    details?: unknown,
+): ServiceError {
+    return Object.assign(new Error(message), { code, details });
 }
+const DEFAULT_FEATURED_LIMIT = 4;
+const DEFAULT_CATALOG_LIMIT = 6;
+const MAX_PAGE_LIMIT = 100;
 
-export class BookInventoriesService {
+class BookInventoriesService {
     constructor(
         private readonly booksRepository: BooksRepository,
-        private readonly physicalCopiesRepository: PhysicalCopiesRepository
-    ) { }
+        private readonly physicalCopiesRepository: PhysicalCopiesRepository,
+    ) {}
 
-    public getFeaturedBooks(params: {
-        limit?: number;
-    }): Promise<GetFeaturedBooksResultEntity[]> {
+    public async getFeaturedBooks(params: { limit?: number | undefined }) {
+        // will replace by return type
         // call this.booksRepository.getFeaturedBooks(...) to return to controller layer
-        const limit = params.limit ?? 4;
+        const limit = Math.min(
+            params.limit ?? DEFAULT_FEATURED_LIMIT,
+            MAX_PAGE_LIMIT,
+        );
         return this.booksRepository.getFeaturedBooks(limit);
     }
 
-    public getBooks(params: {
-        q?: string;
-        category?: string;
-        genre?: string;
-        language?: string;
-        availableNow?: boolean;
-        stock?: "all" | "available" | "unavailable";
-        sortBy?: "relevance" | "title" | "publishedYear";
-        page?: number;
-        limit?: number;
-    }): Promise<GetBooksResultEntity[]> {
+    public async getBooks(params: {
+        q?: string | undefined;
+        category?: string | undefined;
+        genre?: string | undefined;
+        language?: string | undefined;
+        availableNow?: boolean | undefined;
+        stock?: "all" | "available" | "unavailable" | undefined;
+        sortBy?: "relevance" | "title" | "publishedYear" | undefined;
+        page?: number | undefined;
+        limit?: number | undefined;
+    }) {
+        // will replace by return type
         // call this.booksRepository.getBooks(...) to return to controller layer
-        return this.booksRepository.getBooks(
-            params.q,
+        const page = params.page ?? 1;
+        const limit = Math.min(
+            params.limit ?? DEFAULT_CATALOG_LIMIT,
+            MAX_PAGE_LIMIT,
+        );
+        const stock = params.stock ?? "all";
+        const sortBy = params.sortBy ?? "relevance";
+        const q = params.q ? params.q : undefined;
+        const { books, totalItem } = await this.booksRepository.getBooks(
+            q,
             params.category,
             params.genre,
             params.language,
             params.availableNow,
-            params.stock,
-            params.sortBy,
-            params.page,
-            params.limit
+            stock,
+            sortBy,
+            page,
+            limit,
         );
-    }
-
-
-    public getBookById(
-        id: string,
-        role: "staff" | "student",
-        studentId: string | null  // userId, not accountId. Null if role is staff
-    ): Promise<Record<string, unknown>> {
-        // call this.booksRepository.getBooksWithSummaryInfoByIdOrIsbn(...)
-        // If null, throw error Book not found
-        // else call this.physicalCopiesRepository.getPhysicalCopiesByBookIdWithActiveLoanAndHold(...)
-        //      from the bookId from getBooksWithSummaryInfoByIdOrIsbn call
-        // 
-        // pass to getBookByIdResponseDto constructor and call toResponse to filter out the fields (need implemenent getBookByIdResponseDto)
-        const book = this.booksRepository.getBooksWithSummaryInfoByIdOrIsbn(id);
-        if (!book) {
-            throw serviceError("BOOK_NOT_FOUND", "Book not found");
-        }
-
-        const rawCopies =
-            (this.physicalCopiesRepository.getPhysicalCopiesByBookIdWithActiveLoanAndHold(
-                book._id
-            )) ?? [];
-
-        const viewerContext =
-            role === "student" && studentId
-                ? this.booksRepository.getBookViewerContext(studentId, book._id)
-                : null;
-
-        const {
-            createdAt: _createdAt,
-            updatedAt: _updatedAt,
-            stockSummary: { isAvailableNow: _isAvailableNow, ...stockSummary },
-            ...bookFields
-        } = book;
-
-        const copies = rawCopies.map((copy) => {
-            const displayLocation =
-                copy.state === "Borrowed"
-                    ? "Currently with a reader"
-                    : copy.state === "Reserved"
-                        ? "Reserved at library counter"
-                        : copy.homeLocation;
-
-            const baseCopy = {
-                _id: copy._id,
-                copyCode: copy.copyCode,
-                homeLocation: copy.homeLocation,
-                state: copy.state,
-                condition: copy.condition,
-                displayLocation
-            };
-
-            if (role === "student") {
-                return baseCopy;
-            }
-
-            return {
-                ...baseCopy,
-                activeLoan: copy.state === "Borrowed" ? copy.activeLoan : null,
-                activeHold: copy.state === "Reserved" ? copy.activeHold : null,
-                hasLoanHistory: copy.hasLoanHistory
-            };
-        });
-
-        if (role === "student") {
-            return {
-                ...bookFields,
-                stockSummary,
-                copies,
-                viewerContext
-            };
-        }
-
-        const canDeleteTitle = rawCopies.length === 0;
-        const hasLoanHistory = rawCopies.some((c) => c.hasLoanHistory);
-        const deleteDisabledReason = canDeleteTitle
-            ? null
-            : hasLoanHistory
-                ? "Unavailable: this title has physical copies and loan history. Borrowed copies and historical loans cannot be deleted."
-                : "Unavailable: this title has physical copies and cannot be deleted.";
-
         return {
-            ...bookFields,
-            stockSummary,
-            canDeleteTitle,
-            deleteDisabledReason,
-            copies
+            items: books,
+            pagination: {
+                totalItems: totalItem,
+                currentPage: page,
+                totalPages: Math.ceil(totalItem / limit),
+                limit,
+            },
         };
     }
 
-    public createBook(params: {
+    public async getBookById(
+        id: string,
+        role: "staff" | "student",
+        studentId: string | null, // userId, not accountId. Null if role is staff
+    ) {
+        // not implemented currently bcz of the complexity query
+        // call this.booksRepository.getBooksWithSummaryInfoByIdOrIsbn(...)
+        const book =
+            await this.booksRepository.getBooksWithSummaryInfoByIdOrIsbn(id);
+        // If null, throw error Book not found
+        if (!book) {
+            throw serviceError("BOOK_NOT_FOUND", "Book not found");
+        }
+        // else call this.physicalCopiesRepository.getPhysicalCopiesByBookIdWithActiveLoanAndHold(...)
+        //      from the bookId from getBooksWithSummaryInfoByIdOrIsbn call
+        //
+        const [copiesResult, viewerContext] = await Promise.all([
+            this.physicalCopiesRepository.getPhysicalCopiesByBookIdWithActiveLoanAndHold(
+                book._id,
+            ),
+            role === "student" && studentId
+                ? this.booksRepository.getBookViewerContext(studentId, book._id)
+                : Promise.resolve(null),
+        ]);
+        // pass to getBookByIdResponseDto constructor and call toResponse to filter out the fields (need implemenent getBookByIdResponseDto)
+        const dto = new GetBookByIdResponseDto(
+            book,
+            copiesResult ?? [],
+            viewerContext,
+            role,
+        );
+        return dto.toResponseObject();
+    }
+
+    public async createBook(params: {
         title: string;
         author: string;
         isbn: string;
         category: string;
-        keywords?: string[];
-        publisher?: string;
-        genre?: string;
-        publishedYear?: number;
-        language?: string;
-        format?: string;
-        pageCount?: number;
-        description?: string;
-        coverImageUrl?: string;
-        shelfReference?: string;
-    }): Promise<BookeWithSummaryInfoEntity> {
+        keywords?: string[] | undefined;
+        publisher?: string | undefined;
+        genre?: string | undefined;
+        publishedYear?: number | undefined;
+        language?: string | undefined;
+        format?: string | undefined;
+        pageCount?: number | undefined;
+        description?: string | undefined;
+        coverImageUrl?: string | undefined;
+        shelfReference?: string | undefined;
+    }) {
+        // will replace by return type
         // call this.booksRepository.getBookByIsbn(...), if exist, throw error
+        const existing = await this.booksRepository.getBookByIsbn(params.isbn);
+        if (existing) {
+            throw serviceError(
+                "DUPLICATE_ISBN",
+                "A book with this ISBN already exists",
+            );
+        }
         // call this.booksRepository.createBook(...) and return BookEntity
+        const created = await this.booksRepository.createBook({
+            ...params,
+            keywords: params.keywords ?? [],
+            genre: params.genre ?? params.category,
+            language: params.language ?? "English",
+            format: params.format ?? "Paperback",
+        });
+        if (!created) {
+            throw serviceError(
+                "DUPLICATE_ISBN",
+                "A book with this ISBN already exists",
+            );
+        }
         // call this.booksRepository.getBooksWithSummaryInfoById(...) to return BookeWithSummaryInfoEntity. BookId gets from BookEntity
-        const existingBook = this.booksRepository.getBookByIsbn(params.isbn);
-        if (existingBook) {
-            throw serviceError("DUPLICATE_ISBN", "A book with this ISBN already exists");
+        const summary = await this.booksRepository.getBooksWithSummaryInfoById(
+            created._id,
+        );
+        if (!summary) {
+            throw serviceError(
+                "BOOK_NOT_FOUND",
+                "Book not found after creation",
+            );
         }
-
-        const createdBook = this.booksRepository.createBook(params);
-        if (!createdBook) {
-            throw serviceError("INTERNAL_SERVER_ERROR", "Failed to create book");
-        }
-
-        const bookWithSummary = this.booksRepository.getBooksWithSummaryInfoById(createdBook._id);
-        if (!bookWithSummary) {
-            throw serviceError("BOOK_NOT_FOUND", "Book not found");
-        }
-
-        return bookWithSummary;
+        return summary;
     }
 
-    public updateBookById(
-        bookId: string,
-        params: {
-            title: string;
-            author: string;
-            isbn: string;
-            category: string;
-            publisher?: string | null;
-            keywords?: string[];
-            genre?: string | null;
-            publishedYear?: number | null;
-            language?: string;
-            format?: string;
-            pageCount?: number | null;
-            description?: string | null;
-            coverImageUrl?: string | null;
-            shelfReference?: string | null;
-        }
-    ): Promise<BookeWithSummaryInfoEntity> {
+    public async updateBookById(params: {
+        bookId: string;
+        title: string;
+        author: string;
+        isbn: string;
+        category: string;
+        publisher?: string | null | undefined;
+        keywords?: string[] | undefined;
+        genre?: string | null | undefined;
+        publishedYear?: number | null | undefined;
+        language?: string | undefined;
+        format?: string | undefined;
+        pageCount?: number | null | undefined;
+        description?: string | null | undefined;
+        coverImageUrl?: string | null | undefined;
+        shelfReference?: string | null | undefined;
+    }) {
+        // will replace by return type
         // call this.booksRepository.getBookByIsbn(...), if exist, throw error
+        const existingBook = await this.booksRepository.getBookById(
+            params.bookId,
+        );
+        if (!existingBook) {
+            throw serviceError("BOOK_NOT_FOUND", "Book not found");
+        }
+        const existingByIsbn = await this.booksRepository.getBookByIsbn(
+            params.isbn,
+        );
+        if (existingByIsbn && existingByIsbn._id !== existingBook._id) {
+            throw serviceError(
+                "DUPLICATE_ISBN",
+                "A book with this ISBN already exists",
+            );
+        }
         // call this.booksRepository.updateBookById(...) and return BookEntity
-        // call this.booksRepository.getBooksWithSummaryInfoById(...) to return BookeWithSummaryInfoEntity. BookId gets from BookEntity  
-        const existingBook = this.booksRepository.getBookByIsbn(params.isbn);
-        if (existingBook && existingBook._id !== bookId) {
-            throw serviceError("DUPLICATE_ISBN", "A book with this ISBN already exists");
-        }
-
-        const updatedBook = (
-            this.booksRepository.updateBookById as (
-                id: string,
-                data?: typeof params
-            ) => Promise<BookEntity | null>
-        )(bookId, params);
-        if (!updatedBook) {
+        const updated = await this.booksRepository.updateBookById(
+            existingBook._id,
+        );
+        if (!updated) {
             throw serviceError("BOOK_NOT_FOUND", "Book not found");
         }
-
-        const bookWithSummary = this.booksRepository.getBooksWithSummaryInfoById(updatedBook._id);
-        if (!bookWithSummary) {
+        // call this.booksRepository.getBooksWithSummaryInfoById(...) to return BookeWithSummaryInfoEntity. BookId gets from BookEntity
+        const summary = await this.booksRepository.getBooksWithSummaryInfoById(
+            updated._id,
+        );
+        if (!summary) {
             throw serviceError("BOOK_NOT_FOUND", "Book not found");
         }
-
-        return bookWithSummary;
+        return summary;
     }
 
-
-    public deleteBookById(bookId: string): Promise<BookEntity> {
+    public async deleteBookById(bookId: string): Promise<void> {
+        // will replace by return type
         // call this.booksRepository.getBooksWithSummaryInfoById(...)
+        const book =
+            await this.booksRepository.getBooksWithSummaryInfoById(bookId);
         // If null, throw error Book not found
-        // If not null, check if totalPhysicalCopies > 0 or totalLoanHistory > 0, throw error Book has physical copies or loan history and cannot be deleted
-        // call this.booksRepository.deleteBookById(...) and return BookEntity
-        // If delete method return null, throw error
-        const book = this.booksRepository.getBooksWithSummaryInfoById(bookId);
         if (!book) {
             throw serviceError("BOOK_NOT_FOUND", "Book not found");
         }
-
-        const totalPhysicalCopies =
-            (book as { totalPhysicalCopies?: number }).totalPhysicalCopies ??
-            book.stockSummary.totalCopies;
-        const totalLoanHistory =
-            (book as { totalLoanHistory?: number }).totalLoanHistory ?? 0;
-
-        if (totalPhysicalCopies > 0 || totalLoanHistory > 0) {
+        // If not null, check if totalPhysicalCopies > 0 or totalLoanHistory > 0, throw error Book has physical copies or loan history and cannot be deleted
+        const copies =
+            (await this.physicalCopiesRepository.getPhysicalCopiesByBookIdWithActiveLoanAndHold(
+                book._id,
+            )) ?? [];
+        if (book.stockSummary.totalCopies > 0 || copies.length > 0) {
             throw serviceError(
                 "BOOK_HAS_COPIES_OR_HISTORY",
-                "This title has physical copies or loan history and cannot be deleted"
+                "This title has physical copies or loan history and cannot be deleted",
             );
         }
-
-        const deletedBook = this.booksRepository.deleteBookById(bookId);
-        if (!deletedBook) {
+        // call this.booksRepository.deleteBookById(...) and return BookEntity
+        const deleted = await this.booksRepository.deleteBookById(book._id);
+        // If delete method return null, throw error
+        if (!deleted) {
             throw serviceError("BOOK_NOT_FOUND", "Book not found");
         }
-
-        return deletedBook;
     }
 
     // Becare full bookId and copyId are different, bookId is for book entity, copyId is for physical copy entity
 
-    public addCopyToBook(params: {
+    public async addCopyToBook(params: {
         bookId: string;
         copyCode: string;
         homeLocation: string;
         initialState: "Available" | "Damaged" | "Lost";
         condition: "Good" | "Damaged" | "Lost";
         notes?: string | undefined;
-    }): Promise<{
-        copy: PhysicalCopyEntity;
-        updatedStockSummary: AddCopyToBookStockSummaryEntity;
-    }> {
+    }) {
+        // will replace by return type
         // call this.bookRepository.getBookById(...), if not exist, throw error
-        // call this.physicalCopiesRepository.getPyhsicalCopy(...) with copyId null and copyCode, if exist, throw error
-        // call this.physicalCopiesRepository.addCopyToBookStock(...) and return PhysicalCopyEntity
-        // call this.physicalCopiesRepository.getSummaryStockAfterAddCopyToBookStock(...) to return AddCopyToBookStockSummaryEntity. CopyId gets from PhysicalCopyEntity
-        const book = this.booksRepository.getBookById(params.bookId);
+        const book = await this.booksRepository.getBookById(params.bookId);
         if (!book) {
             throw serviceError("BOOK_NOT_FOUND", "Book not found");
         }
-
-        const existingCopy = this.physicalCopiesRepository.getPyhsicalCopy(null, params.copyCode);
+        // call this.physicalCopiesRepository.getPyhsicalCopy(...) with copyId null and copyCode, if exist, throw error
+        const existingCopy =
+            await this.physicalCopiesRepository.getPyhsicalCopy(
+                null,
+                params.copyCode,
+            );
         if (existingCopy) {
             throw serviceError(
                 "DUPLICATE_COPY_CODE",
-                "Copy ID / barcode must be unique across the library"
+                "Copy ID / barcode must be unique across the library",
             );
         }
-
-        const createdCopy = this.physicalCopiesRepository.addCopyToBookStock(params);
+        // call this.physicalCopiesRepository.addCopyToBookStock(...) and return PhysicalCopyEntity
+        const createdCopy =
+            await this.physicalCopiesRepository.addCopyToBookStock({
+                ...params,
+                bookId: book._id,
+            });
         if (!createdCopy) {
-            throw serviceError("INTERNAL_SERVER_ERROR", "Failed to add physical copy");
-        }
-
-        const updatedStockSummary =
-            this.physicalCopiesRepository.getSummaryStockAfterAddCopyToBookStock(
-                createdCopy._id
+            throw serviceError(
+                "DUPLICATE_COPY_CODE",
+                "Copy ID / barcode must be unique across the library",
             );
-        if (!updatedStockSummary) {
-            throw serviceError("INTERNAL_SERVER_ERROR", "Failed to get updated stock summary");
         }
-
+        // call this.physicalCopiesRepository.getSummaryStockAfterAddCopyToBookStock(...) to return AddCopyToBookStockSummaryEntity. CopyId gets from PhysicalCopyEntity
+        const updatedStockSummary =
+            await this.physicalCopiesRepository.getSummaryStockAfterAddCopyToBookStock(
+                createdCopy._id,
+            );
         return {
-            copy: createdCopy,
-            updatedStockSummary
+            copy: {
+                ...createdCopy,
+                hasLoanHistory: false,
+            },
+            updatedStockSummary,
         };
     }
 
-    public updateCopy(params: {
+    public async updateCopy(params: {
         copyId: string | undefined;
         copyCode: string | undefined;
         homeLocation: string;
         state: "Available" | "Damaged" | "Lost";
         condition: "Good" | "Damaged" | "Lost";
         notes?: string;
-    }): Promise<{
-        copy: PhysicalCopyEntity;
-        updatedStockSummary: UpdateCopyToBookStockSummaryEntity;
-    }> {
-        // call this.physicalCopiesRepository.getPhysicalCopyWithLoanAndHoldStateById(...), 
+    }) {
+        // call this.physicalCopiesRepository.getPhysicalCopyWithLoanAndHoldStateById(...),
+        let targetCopyId = params.copyId;
+        if (!targetCopyId) {
+            if (!params.copyCode) {
+                throw serviceError("COPY_NOT_FOUND", "Physical copy not found");
+            }
+            const found = await this.physicalCopiesRepository.getPyhsicalCopy(
+                null,
+                params.copyCode,
+            );
+            if (!found) {
+                throw serviceError("COPY_NOT_FOUND", "Physical copy not found");
+            }
+            targetCopyId = found._id;
+        }
+        const copyWithState =
+            await this.physicalCopiesRepository.getPhysicalCopyWithLoanAndHoldStateById(
+                targetCopyId,
+            );
         //    if not exist, throw error
-        //    if exist and has active loan or hold, throw error
-        // call this.physicalCopiesRepository.updatePhysicalCopy(...) and return PhysicalCopyEntity
-        // call this.physicalCopiesRepository.getSummaryStockAfterUpdateCopyToBookStock(...) to return UpdateCopyToBookStockSummaryEntity. CopyId gets from PhysicalCopyEntity
-        const targetId = params.copyId ?? params.copyCode ?? "";
-        const existingCopy =
-            this.physicalCopiesRepository.getPhysicalCopyWithLoanAndHoldStateById(targetId);
-        if (!existingCopy) {
+        if (!copyWithState) {
             throw serviceError("COPY_NOT_FOUND", "Physical copy not found");
         }
-
-        if (existingCopy.state === "Borrowed" || existingCopy.state === "Reserved") {
+        //    if exist and has active loan or hold, throw error
+        if (
+            copyWithState.state === "Borrowed" ||
+            copyWithState.state === "Reserved"
+        ) {
             throw serviceError(
                 "COPY_HAS_ACTIVE_LOAN_OR_HOLD",
-                "Complete the return or cancel the hold before changing this copy"
+                "Complete the return or cancel the hold before changing this copy",
             );
         }
-
-        const updatedCopy = this.physicalCopiesRepository.updatePhysicalCopy({
-            ...params,
-            copyId: params.copyId ?? existingCopy._id,
-            copyCode: params.copyCode ?? existingCopy.copyCode
-        });
+        // call this.physicalCopiesRepository.updatePhysicalCopy(...) and return PhysicalCopyEntity
+        const updatedCopy =
+            await this.physicalCopiesRepository.updatePhysicalCopy({
+                copyId: copyWithState._id,
+                copyCode: copyWithState.copyCode,
+                homeLocation: params.homeLocation,
+                state: params.state,
+                condition: params.condition,
+                notes: params.notes,
+            });
         if (!updatedCopy) {
             throw serviceError("COPY_NOT_FOUND", "Physical copy not found");
         }
-
+        // call this.physicalCopiesRepository.getSummaryStockAfterUpdateCopyToBookStock(...) to return UpdateCopyToBookStockSummaryEntity. CopyId gets from PhysicalCopyEntity
         const updatedStockSummary =
-            this.physicalCopiesRepository.getSummaryStockAfterUpdateCopyToBookStock(
-                updatedCopy._id
+            await this.physicalCopiesRepository.getSummaryStockAfterUpdateCopyToBookStock(
+                updatedCopy._id,
             );
-        if (!updatedStockSummary) {
-            throw serviceError("INTERNAL_SERVER_ERROR", "Failed to get updated stock summary");
-        }
-
         return {
-            copy: updatedCopy,
-            updatedStockSummary
+            copy: {
+                ...updatedCopy,
+                hasLoanHistory: copyWithState.hasLoanHistory,
+            },
+            updatedStockSummary,
         };
     }
 
-    public deleteCopy(params: {
+    public async deleteCopy(params: {
         copyId: string | undefined;
         copyCode: string | undefined;
-    }): Promise<boolean> {
-        // call this.physicalCopiesRepository.getPhysicalCopyWithLoanAndHoldStateById(...), 
+    }): Promise<void> {
+        // call this.physicalCopiesRepository.getPhysicalCopyWithLoanAndHoldStateById(...),
+        let targetCopyId = params.copyId;
+        if (!targetCopyId) {
+            if (!params.copyCode) {
+                throw serviceError("COPY_NOT_FOUND", "Physical copy not found");
+            }
+            const found = await this.physicalCopiesRepository.getPyhsicalCopy(
+                null,
+                params.copyCode,
+            );
+            if (!found) {
+                throw serviceError("COPY_NOT_FOUND", "Physical copy not found");
+            }
+            targetCopyId = found._id;
+        }
+        const copyWithState =
+            await this.physicalCopiesRepository.getPhysicalCopyWithLoanAndHoldStateById(
+                targetCopyId,
+            );
         //    if not exist, throw error
-        //    if exist and has loan history, throw error
-        // call this.physicalCopiesRepository.deletePhysicalCopyById(...) and return boolean
-        // If delete method return false, throw error
-        const targetId = params.copyId ?? params.copyCode ?? "";
-        const existingCopy =
-            this.physicalCopiesRepository.getPhysicalCopyWithLoanAndHoldStateById(targetId);
-        if (!existingCopy) {
+        if (!copyWithState) {
             throw serviceError("COPY_NOT_FOUND", "Physical copy not found");
         }
-
+        //    if exist and has loan history, throw error
         if (
-            existingCopy.hasLoanHistory ||
-            existingCopy.hasHoldHistory ||
-            existingCopy.state === "Borrowed" ||
-            existingCopy.state === "Reserved"
+            copyWithState.state === "Borrowed" ||
+            copyWithState.state === "Reserved" ||
+            copyWithState.hasLoanHistory ||
+            copyWithState.hasHoldHistory
         ) {
             throw serviceError(
                 "COPY_HAS_LOAN_HISTORY",
-                "This copy has loan history and cannot be deleted"
+                "This copy has loan history and cannot be deleted",
             );
         }
-
-        const deleted = this.physicalCopiesRepository.deletePhysicalCopyById(
-            params.copyId ?? existingCopy._id,
-            params.copyCode ?? existingCopy.copyCode
-        );
+        // call this.physicalCopiesRepository.deletePhysicalCopyById(...) and return boolean
+        const deleted =
+            await this.physicalCopiesRepository.deletePhysicalCopyById(
+                copyWithState._id,
+                copyWithState.copyCode,
+            );
+        // If delete method return false, throw error
         if (!deleted) {
             throw serviceError("COPY_NOT_FOUND", "Physical copy not found");
         }
-
-        return deleted;
     }
 }
