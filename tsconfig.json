@@ -45,5 +45,6 @@
       "*": ["./*"]
     }
   },
-  "exclude": ["node_modules", "dist"],
+  // .test holds the API tests; they have their own .test/tsconfig.json and are not built.
+  "exclude": ["node_modules", "dist", ".test"],
 }

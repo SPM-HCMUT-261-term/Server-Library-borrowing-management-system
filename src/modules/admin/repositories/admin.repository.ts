@@ -231,7 +231,7 @@ export class AdminRepositoryImpl implements AdminRepository {
         fullName: string;
         password: string;
         role: "student" | "staff" | "admin";
-        yearGroup: string | null;
+        yearGroup?: string | null | undefined;
     }): Promise<AdminUserWithStatsEntity | null> {
         const result = await this.pool.query<AdminUserStatsRow>(
             `
@@ -249,7 +249,7 @@ export class AdminRepositoryImpl implements AdminRepository {
                 params.fullName,
                 params.password,
                 params.role,
-                params.yearGroup,
+                params.yearGroup ?? null, // optional field not sent -> NULL
             ],
         );
         const row = result.rows[0];
@@ -260,31 +260,36 @@ export class AdminRepositoryImpl implements AdminRepository {
         id: string;
         fullName: string;
         role: "student" | "staff" | "admin";
-        yearGroup: string | null;
+        yearGroup?: string | null | undefined;
         status: "Active" | "Inactive";
     }): Promise<AdminUserWithStatsEntity | null> {
+        const values: unknown[] = [
+            params.id,
+            params.fullName,
+            params.role,
+            params.status,
+        ];
+        const setClauses = ["full_name = $2", "role = $3", "status = $4"];
+
+        // undefined = not sent, keep the current year group. null clears it.
+        if (params.yearGroup !== undefined) {
+            values.push(params.yearGroup);
+            setClauses.push(`year_group = $${values.length}`);
+        }
+        setClauses.push("updated_at = CURRENT_TIMESTAMP");
+
         const result = await this.pool.query<AdminUserStatsRow>(
             `
                 WITH updated_user AS (
                     UPDATE users AS u
-                    SET full_name = $2,
-                        role = $3,
-                        year_group = $4,
-                        status = $5,
-                        updated_at = CURRENT_TIMESTAMP
+                    SET ${setClauses.join(",\n                        ")}
                     WHERE ${userIdCondition()}
                     RETURNING *
                 )
                 SELECT ${userStatsColumns}
                 FROM updated_user AS u
             `,
-            [
-                params.id,
-                params.fullName,
-                params.role,
-                params.yearGroup,
-                params.status,
-            ],
+            values,
         );
         const row = result.rows[0];
         return row ? toUserWithStats(row) : null;

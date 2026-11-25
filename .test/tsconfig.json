@@ -1,0 +1,14 @@
+{
+  // Type-checking (editor + `npx tsc -p .test`) for the API tests.
+  // The root tsconfig.json excludes .test, because its rootDir is ./src and `npm run build`
+  // would otherwise fail on these files. Nothing here is compiled into dist/.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true,
+    "declaration": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["./**/*.ts"],
+  "exclude": []
+}

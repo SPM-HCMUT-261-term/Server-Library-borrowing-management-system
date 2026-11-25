@@ -76,7 +76,7 @@ export class AdminService {
                 fullName: params.fullName,
                 password: params.password,
                 role: params.role,
-                yearGroup: params.yearGroup ?? null,
+                yearGroup: params.yearGroup,
             })
             .then((created: AdminUserWithStatsDto | null) => {
                 if (!created) {
@@ -103,10 +103,7 @@ export class AdminService {
 
         // If successful, return the updated user with stats
         return this.userRepository
-            .updateUserWithStats({
-                ...params,
-                yearGroup: params.yearGroup ?? null,
-            })
+            .updateUserWithStats(params)
             .then((updated: AdminUserWithStatsDto | null) => {
                 if (!updated) {
                     throw serviceError("USER_NOT_FOUND", "User not found");
