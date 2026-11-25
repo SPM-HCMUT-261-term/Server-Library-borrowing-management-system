@@ -111,6 +111,7 @@ CREATE TABLE loans (
     returned_at TIMESTAMP WITH TIME ZONE,
     -- Ngày thực tế trả sách
     return_condition VARCHAR(20) CHECK (return_condition IN ('Good', 'Damaged', 'Lost')),
+    return_condition_note TEXT,
     renewal_count INT DEFAULT 0 CHECK (renewal_count <= 1),
     -- P4.2 (Max 1 lần)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
