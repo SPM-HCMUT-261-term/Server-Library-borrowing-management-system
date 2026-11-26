@@ -23,8 +23,7 @@ const usersQuerySchema = z.object({
 
 const createUserSchema = z.object({
   accountId: z.string().trim().min(1, "accountId is required"),
-  fullName: z.string().trim().min(1, "fullName is required").
-    regex(/^[a-zA-ZÀ-ỹ\s]+$/, "fullName must only contain letters and spaces in English and Vietnamese"),
+  fullName: z.string().trim().min(1, "fullName is required"),
   password: z.string().min(1, "password is required"),
   role: roleSchema,
   yearGroup: z.string().trim().nullable().optional()
@@ -47,7 +46,7 @@ type ServiceError = Error & { code?: string };
 
 function validationDetails(error: z.ZodError): Record<string, string> {
   return Object.fromEntries(
-    error.issues.map((issue) => [issue.path, issue.message])
+    error.issues.map((issue) => [issue.path.join("."), issue.message])
   );
 }
 

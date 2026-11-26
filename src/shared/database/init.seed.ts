@@ -4,7 +4,7 @@ import { exit } from 'node:process';
 export const initSeed = async () => {
 
     try {
-        const result = (await pool.query('SELECT COUNT(*) as num_user FROM users;'));
+        const result = (await pool.query('SELECT COUNT(*)::int as "numUser" FROM users;'));
         const numRow = result.rows[0].numUser;
         // console.log("numRow", numRow);
         if (numRow === 0) {

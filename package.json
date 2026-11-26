@@ -7,17 +7,22 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/server.ts",
+    "dev:test": "tsx watch --env-file=.env.test.local src/server.ts",
     "build": "tsc && tsc-alias && tsc-esm-fix --src dist",
     "start": "node --env-file=.env dist/server.js",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:api": "vitest run --config .test/vitest.config.ts",
+    "test:api:books": "vitest run --config .test/vitest.config.ts book-inventories",
     "clear": "node delete.js",
     "generate-keys": "node .bin/crypto.js"
   },
   "devDependencies": {
     "@types/connect-pg-simple": "^7.0.3",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/express-session": "^1.19.0",
+    "@types/morgan": "^1.9.10",
     "@types/node": "^26.6.6",
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
@@ -31,8 +36,10 @@
   },
   "dependencies": {
     "connect-pg-simple": "^10.0.0",
+    "cors": "^2.8.6",
     "express": "^5.3.0",
     "express-session": "^1.19.0",
+    "morgan": "^1.12.1",
     "node-argon2": "^1.0.0",
     "nodemailer": "^10.3.1",
     "pg": "^8.23.1",

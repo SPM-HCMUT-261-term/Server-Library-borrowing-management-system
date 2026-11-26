@@ -17,14 +17,14 @@ export interface AdminRepository {
         fullName: string;
         password: string;
         role: "student" | "staff" | "admin";
-        yearGroup: string | null;
+        yearGroup?: string | null | undefined; // undefined is stored as NULL
     }): Promise<AdminUserWithStatsEntity | null>; //null if accountId already exists
 
     updateUserWithStats(params: {
         id: string; //User _id or accountId
         fullName: string;
         role: "student" | "staff" | "admin";
-        yearGroup: string | null;
+        yearGroup?: string | null | undefined; // undefined keeps the current value, null clears it
         status: "Active" | "Inactive";
     }): Promise<AdminUserWithStatsEntity | null>; //null if user not found
 

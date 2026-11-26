@@ -1,6 +1,7 @@
 # compiled output
 /dist
 /node_modules
+*/node_modules
 /build
 
 # TypeScript build cache
@@ -68,3 +69,5 @@ delete.js
 *.zip
 
 *-temp-*/
+
+*CLAUDE*
