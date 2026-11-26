@@ -1,0 +1,83 @@
+# Local PostgreSQL databases for development and testing.
+#
+#   docker compose up -d --wait            start both databases
+#   docker compose up -d --wait db         start only the main database
+#   docker compose up -d --wait test-db    start only the test database
+#   docker compose stop test-db            stop the test database (ALL ITS DATA IS LOST)
+#   docker compose down                    stop and remove both containers (main data is kept)
+#
+# Neither database applies the schema by itself. After a new database starts, run
+# schema.sql and then init.sql by hand (see README.md, "Getting started").
+# Both containers mount src/shared/database at /sql (read-only), so psql can run
+# the scripts with -f /sql/<file>.sql.
+#
+# Credentials, database names and ports must match .env (db) and .env.test.local (test-db).
+# POSTGRES_USER and POSTGRES_DB are only used when the data directory is created. If you
+# change them after `db` has already run, delete its volume (`docker compose down -v`)
+# and prepare it again.
+
+name: hcmut-261-spm-dbs
+
+services:
+  # Main database for `npm run dev` / `npm start` (.env).
+  # Data is stored in the named volume `db-data` and survives stop, restart and `down`.
+  # Only `docker compose down -v` deletes it.
+  db:
+    image: postgres:18-bookworm
+    container_name: hcmut-261-spm-db-main
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: main
+      POSTGRES_DB: library-borrowing-system-hcmut-spm-261
+    ports:
+      - "5432:5432"
+    volumes:
+      # Postgres 18+ images keep their data under /var/lib/postgresql (not .../data).
+      - db-data:/var/lib/postgresql
+      - ./src/shared/database:/sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d library-borrowing-system-hcmut-spm-261"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Test database for `npm run dev:test`, `npm run test:run` and `npm run test:api` (.env.test.local).
+  # WARNING: the data directory is tmpfs (in memory). Every stop, restart or `down`
+  # deletes ALL tables and rows. Run schema.sql and init.sql again after each start.
+  test-db:
+    image: postgres:18-bookworm
+    container_name: hcmut-261-spm-db-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: test-library-borrowing-system-hcmut-spm-261
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql:rw,size=512m
+    volumes:
+      - ./src/shared/database:/sql:ro
+    # Durability is turned off: faster tests, and the data is thrown away anyway.
+    command:
+      - postgres
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+      - -c
+      - autovacuum=off
+      - -c
+      - max_wal_size=64MB
+      - -c
+      - min_wal_size=32MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d test-library-borrowing-system-hcmut-spm-261"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  db-data:

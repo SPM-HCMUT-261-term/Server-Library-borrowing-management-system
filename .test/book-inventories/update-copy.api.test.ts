@@ -133,7 +133,7 @@ describe("PUT /copies/:id", () => {
 
             const res = await staff.put(copyPath(COPY.midnightAvailable), { ...AVAILABLE_COPY_BODY, state: "Borrowed" });
 
-            expectValidationError(res, "body.state");
+            expectValidationError(res, "state");
         });
     });
 

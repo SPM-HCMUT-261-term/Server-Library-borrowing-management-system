@@ -46,7 +46,7 @@ type ServiceError = Error & { code?: string };
 
 function validationDetails(error: z.ZodError): Record<string, string> {
   return Object.fromEntries(
-    error.issues.map((issue) => [issue.path, issue.message])
+    error.issues.map((issue) => [issue.path.join("."), issue.message])
   );
 }
 

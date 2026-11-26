@@ -10,7 +10,7 @@ export function expectApiError(response: ApiResponse, status: number, code: stri
 
 /**
  * Checks a 400 VALIDATION_ERROR whose `error.details` has a message for `field`.
- * `field` is the exact key the controller uses, e.g. "limit" or "body.author"
+ * `field` is the exact key the controller uses, e.g. "limit", "author" or "keywords.1"
  * (passed as an array path, so a dot in the key is not read as nesting).
  */
 export function expectValidationError(response: ApiResponse, field: string): void {

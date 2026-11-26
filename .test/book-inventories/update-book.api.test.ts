@@ -100,8 +100,8 @@ describe("PUT /books/:id", () => {
 
             const res = await staff.put(`/books/${BOOK_ID.midnightLibrary}`, { ...MIDNIGHT_REQUIRED, author: "" });
 
-            expectValidationError(res, "body.author");
-            expect(res.body.error.details["body.author"]).toBe("Author is required");
+            expectValidationError(res, "author");
+            expect(res.body.error.details["author"]).toBe("Author is required");
         });
 
         it("[UPDATE-07] pageCount as a string is rejected", async () => {
@@ -109,7 +109,7 @@ describe("PUT /books/:id", () => {
 
             const res = await staff.put(`/books/${BOOK_ID.midnightLibrary}`, { ...MIDNIGHT_REQUIRED, pageCount: "300" });
 
-            expectValidationError(res, "body.pageCount");
+            expectValidationError(res, "pageCount");
         });
     });
 

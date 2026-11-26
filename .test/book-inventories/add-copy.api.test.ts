@@ -96,7 +96,7 @@ describe("POST /books/:bookId/copies", () => {
 
             const res = await staff.post(`/books/${BOOK_ID.midnightLibrary}/copies`, { copyCode: "WB-00427" });
 
-            expectValidationError(res, "body.homeLocation");
+            expectValidationError(res, "homeLocation");
         });
 
         it("[ADD-COPY-07] Borrowed is not an allowed initial state", async () => {
@@ -108,7 +108,7 @@ describe("POST /books/:bookId/copies", () => {
                 initialState: "Borrowed"
             });
 
-            expectValidationError(res, "body.initialState");
+            expectValidationError(res, "initialState");
         });
     });
 

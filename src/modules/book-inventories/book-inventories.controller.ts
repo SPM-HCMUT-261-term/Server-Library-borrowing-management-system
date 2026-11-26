@@ -70,7 +70,7 @@ const createBookBodySchema = z
     author: z.string().trim().min(1, "Author is required"),
     isbn: z.string().trim().min(1, "ISBN is required"),
     category: bookCategorySchema,
-    keywords: z.array(z.string().trim()).optional(),
+    keywords: z.array(z.string().trim().min(1, "Keyword cannot be empty")).optional(),
     publisher: z.string().trim().optional(),
     genre: z.string().trim().optional(),
     publishedYear: z.number().int().positive().optional(),
@@ -94,7 +94,7 @@ const updateBookRequestSchema = z.object({
     isbn: z.string().trim().min(1, "ISBN is required"),
     category: bookCategorySchema,
     publisher: z.string().trim().nullable().optional(),
-    keywords: z.array(z.string().trim()).optional(),
+    keywords: z.array(z.string().trim().min(1, "Keyword cannot be empty")).optional(),
     genre: z.string().trim().nullable().optional(),
     publishedYear: z.number().int().positive().nullable().optional(),
     language: z.string().trim().optional(),
@@ -178,7 +178,15 @@ function handleBookInventoryError(res: Response, error: unknown): void {
 
 function validationDetails(error: z.ZodError): Record<string, string> {
   return Object.fromEntries(
-    error.issues.map((issue) => [issue.path.join("."), issue.message])
+    error.issues.map((issue) => {
+      // Schemas that wrap { params, body } produce paths like ["body", "title"].
+      // Drop the wrapper so the key is "title", the same key that endpoints
+      // parsing req.body directly (e.g. createBook) return for that field.
+      // Keep it when nothing follows, e.g. a missing body stays "body".
+      const isWrapped = issue.path[0] === "params" || issue.path[0] === "body";
+      const path = isWrapped && issue.path.length > 1 ? issue.path.slice(1) : issue.path;
+      return [path.join("."), issue.message];
+    })
   );
 }
 

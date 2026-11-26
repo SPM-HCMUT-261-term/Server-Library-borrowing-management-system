@@ -116,6 +116,12 @@ export async function logout(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  res.clearCookie("connect.sid", {
+    path: "/api/v1",
+    httpOnly: true,
+    sameSite: "lax"
+  })
+
   res.status(200).json({
     success: true,
     message: "Signed out successfully"

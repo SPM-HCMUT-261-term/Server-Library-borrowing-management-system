@@ -13,22 +13,45 @@ The cases are the ones in `.temp/.temp-test-data/book-inventories.test/book-inve
 
 ## Before you run
 
-The main server must already be running against a database you can wipe.
+> [!IMPORTANT]
+> **The server must already be running in test mode (`npm run dev:test`) before you run any test.**
+> The tests do not start the server. They only send HTTP requests to it.
 
-1. **Start the test database.** It is tmpfs, so it is empty every time the container is created:
-   ```powershell
-   docker run -d --name Lib-borrow-sys-test -p 5433:5432 -e POSTGRES_PASSWORD=test `
-     --tmpfs /var/lib/postgresql:rw,size=512m postgres:18-bookworm `
-     -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c autovacuum=off `
-     -c max_wal_size=64MB -c min_wal_size=32MB
+Run these commands from the **repository root**. The main [README](../../README.md) explains each step in more detail.
+
+1. **Start the test database** (Compose service `test-db`, container `hcmut-261-spm-db-test`, port 5433):
+   ```bash
+   docker compose up -d --wait test-db
    ```
-2. **Create the tables.** Repeat this after every `docker run` or restart:
-   ```powershell
-   docker cp src/shared/database/schema.sql Lib-borrow-sys-test:/tmp/schema.sql
-   docker exec Lib-borrow-sys-test psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f /tmp/schema.sql
+2. **Create the tables and load the data.** Run `schema.sql` first, then `init.sql`:
+   ```bash
+   docker compose exec test-db psql -U postgres -d test-library-borrowing-system-hcmut-spm-261 -v ON_ERROR_STOP=1 -f /sql/schema.sql
+   docker compose exec test-db psql -U postgres -d test-library-borrowing-system-hcmut-spm-261 -v ON_ERROR_STOP=1 -f /sql/init.sql
    ```
-3. **Check `.env.test.local`.** It needs `DB_PORT=5433`, `DB_USER=postgres`, `DB_PASSWORD=test`, `DB_NAME=postgres`, `SESSION_SECRET_KEY=...` and **`ENABLE_DB_RESET=true`**.
-4. **Start the main server:** `npm run dev:test`
+   > [!WARNING]
+   > `test-db` keeps its data in memory. **Stopping or restarting it deletes all tables and rows.** Run both scripts again every time you start it.
+3. **Check `.env.test.local`.** It needs:
+   ```dotenv
+   SERVER_PORT=3000
+   DB_HOST=localhost
+   DB_PORT=5433
+   DB_USER=postgres
+   DB_PASSWORD=test
+   DB_NAME=test-library-borrowing-system-hcmut-spm-261
+   SESSION_SECRET_KEY=any-single-line-secret
+   ENABLE_DB_RESET=true
+   ```
+4. **Start the server in test mode** in its own terminal, and leave it running:
+   ```bash
+   npm run dev:test
+   ```
+   It is ready when the log shows these lines:
+   ```text
+   ENABLE_DB_RESET is on: POST /api/v1/dev/reset-db can wipe the database.
+   Connected to database test-library-borrowing-system-hcmut-spm-261 in localhost:5433
+   Server is running on port 3000
+   ```
+   If the server was started with `npm run dev` instead, stop it and use `npm run dev:test`. `npm run dev` uses `.env` and the main database, where `/dev/reset-db` is off, so every test fails.
 
 The tests call `http://localhost:<SERVER_PORT>/api/v1`. They read `SERVER_PORT` from `.env.test.local`, and use 3000 if it is not set. To point them somewhere else, set `API_BASE_URL`:
 ```powershell
@@ -39,15 +62,48 @@ $env:API_BASE_URL = "http://localhost:3001/api/v1"; npm run test:api:books
 
 ## Run
 
-In a second terminal, while the server is running:
+Use a **second terminal**, or the VS Code test panel, while the server from step 4 is running. There are three ways to run the tests.
 
-```powershell
-npm run test:api:books                      # all book-inventories API tests
-npm run test:api                            # every module under .test/
-npx vitest run --config .test/vitest.config.ts list-books          # one file
-npx vitest run --config .test/vitest.config.ts -t "LIST-03"        # one test, by name
-npx vitest --config .test/vitest.config.ts book-inventories        # watch mode
+### Option A: from the repository root (whole suites)
+
+```bash
+npm run test:api:books    # all book-inventories API tests
+npm run test:api          # every module under .test/
 ```
+
+### Option B: `cd .test` in a terminal (one test or a group)
+
+Inside `.test`, Vitest finds `.test/vitest.config.ts` by itself, so you don't need the `--config` flag. `npx` finds Vitest in the root `node_modules`.
+
+```bash
+cd .test
+```
+
+| Run | Command |
+|---|---|
+| Every API test | `npx vitest run` |
+| One module (folder) | `npx vitest run book-inventories` |
+| One file (one endpoint) | `npx vitest run list-books` |
+| Several files | `npx vitest run create-book update-book delete-book` |
+| One test, by case id | `npx vitest run -t "LIST-03"` |
+| A group of cases (`-t` is a regex) | `npx vitest run -t "LIST-"` or `npx vitest run -t "LIST-0[1-5]"` |
+| One case in one file (faster) | `npx vitest run list-books -t "LIST-03"` |
+| Watch mode (re-runs on save) | `npx vitest book-inventories` |
+
+A file filter matches part of the file path, so `list-books` runs `list-books.api.test.ts`. `-t` matches the full test name, which includes the `describe` text (for example `GET /books [LIST-03] ...`). Filter by case id rather than by path: `-t "GET /books"` also matches `GET /books/featured` and `GET /books/:id`.
+
+Run `cd ..` to go back to the repository root before you use the npm scripts again.
+
+### Option C: open `.test` as its own VS Code workspace (▶ buttons)
+
+1. Run `npm install` once in the repository root. The `.test` workspace uses the root `node_modules`.
+2. In VS Code, choose **File → New Window**, then **File → Open Folder…**, and select the `.test` folder. You can also run `code .test` from the repository root.
+3. Install the **Vitest** extension if you don't have it. In this window it uses `.test/vitest.config.ts` and lists the `*.api.test.ts` files in the **Testing** panel.
+4. Open a test file and click ▶ next to a `describe(...)` to run one endpoint, or next to an `it(...)` to run one case. You can also run a whole folder or file from the **Testing** panel.
+
+Keep the server running in the **other** window, the one opened at the repository root, started with `npm run dev:test`.
+
+---
 
 `npm test` and `npm run test:run` still run only the unit and repository tests in `src/`, so they don't need a running server.
 
@@ -147,7 +203,7 @@ describe("GET /books", () => {
    - `expect.any(String)` accepts any string.
    - Helpers:
      - `expectApiError(res, 409, "DUPLICATE_ISBN")` checks the error envelope and status.
-     - `expectValidationError(res, "body.author")` checks for a 400 with `error.details["body.author"]`.
+     - `expectValidationError(res, "author")` checks for a 400 with `error.details["author"]`. Keys are plain field names on every endpoint, with no `body.` or `params.` prefix.
 
 Multi-step cases, which the Postman data wrote as `setup`, are now plain code inside the test. For example, `DELETE-BOOK-04` creates a book, deletes it, then expects the `GET` to return 404.
 
