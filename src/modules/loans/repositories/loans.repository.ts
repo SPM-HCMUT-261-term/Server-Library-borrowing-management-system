@@ -1,5 +1,6 @@
 import type { Pool, PoolClient, QueryResultRow } from "pg";
 
+import { expireOverdueHolds } from "@shared/database/hold-expiry.js";
 import type {
     BorrowerWithStatsEntity,
     CheckoutCopyEntity,
@@ -324,6 +325,10 @@ export class LoansRepositoryImpl implements LoansRepository {
         const client = await this.pool.connect();
         try {
             await client.query("BEGIN");
+
+            // Expire holds that have just passed collect_by: their copies become Available, and a hold
+            // that expired cannot be fulfilled below.
+            await expireOverdueHolds(client);
 
             // Lock the student row so two checkouts for the same student run one after the other
             // and loansBefore / loansNow stay consistent.

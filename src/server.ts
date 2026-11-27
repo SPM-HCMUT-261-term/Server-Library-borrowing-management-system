@@ -22,6 +22,8 @@ import { devSessionHeaderMiddleware } from '@modules/dev-tools/dev-session-heade
 
 
 import {initSeed} from '@shared/database/init.seed.js';
+import { pool } from '@shared/database/db.js';
+import { startHoldExpiryJob } from '@shared/database/hold-expiry.js';
 import { core } from 'node_modules/zod/index.cjs';
 
 
@@ -78,7 +80,7 @@ server.use('/api/v1/staff', verificationMiddleware, staffLoansRouter);
 // Opt in with ENABLE_DB_RESET=true in .env; leave it unset anywhere else.
 if (process.env.ENABLE_DB_RESET === 'true') {
   server.use('/api/v1/dev', devToolsRouter);
-  console.warn('ENABLE_DB_RESET is on: POST /api/v1/dev/reset-db can wipe the database.');
+  console.warn('ENABLE_DB_RESET is on: POST /api/v1/dev/reset-db can wipe the database, POST /api/v1/dev/expire-holds expires holds.');
 }
 
 
@@ -105,6 +107,8 @@ const startServer = async () => {
     
     server.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
+      // FR-BORROW-02: Ready holds past collect_by become Expired and free their copy (every 60 s).
+      startHoldExpiryJob(pool);
     });
   } catch (error) {
     console.error('Failed to initialize server:', error);

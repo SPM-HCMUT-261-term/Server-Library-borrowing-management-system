@@ -4,24 +4,28 @@
 #   docker compose up -d --wait db         start only the main database
 #   docker compose up -d --wait test-db    start only the test database
 #   docker compose stop test-db            stop the test database (ALL ITS DATA IS LOST)
-#   docker compose down                    stop and remove both containers (main data is kept)
+#   docker compose down -v                 stop and remove both containers and their data
 #
 # Neither database applies the schema by itself. After a new database starts, run
 # schema.sql and then init.sql by hand (see README.md, "Getting started").
-# Both containers mount src/shared/database at /sql (read-only), so psql can run
-# the scripts with -f /sql/<file>.sql.
+# Neither container mounts the SQL scripts. Copy them in first (works in any shell), then
+# run them with -f /sql/<file>.sql:
+#   docker compose cp src/shared/database/. db:/sql        (or test-db:/sql)
+# Do not pipe them in with PowerShell 5.1 (Get-Content | ...): it turns non-ASCII
+# characters such as the "·" in init.sql into "?".
 #
 # Credentials, database names and ports must match .env (db) and .env.test.local (test-db).
 # POSTGRES_USER and POSTGRES_DB are only used when the data directory is created. If you
-# change them after `db` has already run, delete its volume (`docker compose down -v`)
+# change them after `db` has already run, remove it with its data (`docker compose down -v`)
 # and prepare it again.
 
 name: hcmut-261-spm-dbs
 
 services:
   # Main database for `npm run dev` / `npm start` (.env).
-  # Data is stored in the named volume `db-data` and survives stop, restart and `down`.
-  # Only `docker compose down -v` deletes it.
+  # No volume is mounted, but the postgres image declares VOLUME /var/lib/postgresql, so Docker
+  # still creates an ANONYMOUS volume for the data. It survives stop/restart and is reused when
+  # `up` recreates the container. `docker compose down -v` deletes it.
   db:
     image: postgres:18-bookworm
     container_name: hcmut-261-spm-db-main
@@ -31,16 +35,19 @@ services:
       POSTGRES_DB: library-borrowing-system-hcmut-spm-261
     ports:
       - "5432:5432"
-    volumes:
+    # volumes:
       # Postgres 18+ images keep their data under /var/lib/postgresql (not .../data).
-      - db-data:/var/lib/postgresql
-      - ./src/shared/database:/sql:ro
+      # - db-data:/var/lib/postgresql
+      # - ./src/shared/database:/sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d library-borrowing-system-hcmut-spm-261"]
       interval: 5s
       timeout: 3s
       retries: 10
     restart: unless-stopped
+    # Hard RAM cap. memswap_limit equal to mem_limit means no swap on top of it.
+    mem_limit: 512m
+    memswap_limit: 512m
 
   # Test database for `npm run dev:test`, `npm run test:run` and `npm run test:api` (.env.test.local).
   # WARNING: the data directory is tmpfs (in memory). Every stop, restart or `down`
@@ -54,10 +61,14 @@ services:
       POSTGRES_DB: test-library-borrowing-system-hcmut-spm-261
     ports:
       - "5433:5432"
+    # Hard RAM cap. memswap_limit equal to mem_limit means no swap on top of it.
+    # The tmpfs below is RAM too and counts toward this cap, so it is kept smaller than the cap.
+    mem_limit: 512m
+    memswap_limit: 512m
     tmpfs:
-      - /var/lib/postgresql:rw,size=512m
-    volumes:
-      - ./src/shared/database:/sql:ro
+      - /var/lib/postgresql:rw,size=256m
+    # volumes:
+    #   - ./src/shared/database:/sql:ro
     # Durability is turned off: faster tests, and the data is thrown away anyway.
     command:
       - postgres
@@ -78,6 +89,3 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-
-volumes:
-  db-data:

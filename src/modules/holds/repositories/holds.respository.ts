@@ -1,5 +1,6 @@
 import type { Pool, QueryResultRow } from "pg";
 
+import { expireOverdueHolds } from "@shared/database/hold-expiry.js";
 import type {
     BookStockEntity,
     CancelHoldResultEntity,
@@ -210,6 +211,8 @@ export class HoldsRepositoryImpl implements HoldsRepository {
                         WHERE h.student_id::text = $1
                           AND h.book_id::text = $2
                           AND h.status = 'Ready'
+                          -- past collect_by: about to be expired (createHold expires it first), so not a duplicate
+                          AND h.collect_by >= NOW()
                     )
                 ) AS "hasActiveLoanOrHold"
             `,
@@ -305,6 +308,9 @@ export class HoldsRepositoryImpl implements HoldsRepository {
         const client = await this.pool.connect();
         try {
             await client.query("BEGIN");
+
+            // Free copies whose hold has just passed collect_by, so they can be picked below.
+            await expireOverdueHolds(client);
 
             const copyResult = await client.query<
                 QueryResultRow & { id: string }
