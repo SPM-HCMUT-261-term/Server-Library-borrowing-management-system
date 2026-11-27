@@ -143,11 +143,30 @@ Exceptions to the names above:
 - `dev-tools` has no layers: only `dev-tools.routes.ts` and
   `dev-session-header.middleware.ts`.
 
-A request travels like this:
+A request goes in through the layers, and the response comes back the other way:
 
 ```text
-HTTP request → routes → controller → service → repository → PostgreSQL
+Request
+client ─(sends request)→ HTTP request → server.ts → routes → controller → service → repository → PostgreSQL
+
+Response
+client ←(receives response)─ HTTP response ←(JSON)─ controller ←(DTO)─ service ←(entity)─ repository ←(raw rows)─ PostgreSQL
 ```
+
+| Step | Request (going in) | Response (coming back) |
+|---|---|---|
+| `server.ts` | CORS, JSON body parser, session, then `verificationMiddleware` (is the user logged in?); picks the router by URL prefix | |
+| routes | Role guard (`requireStaff`, ...), then calls the controller function | |
+| controller | Validates params, query and body with Zod, calls the service | Sends the JSON envelope `{ success, data }` with the HTTP status |
+| service | Applies the business rules, calls the repository | Builds the response data (DTO) from the entities |
+| repository | Runs parameterized SQL | Turns the raw `pg` rows into entities (`<name>.entity.ts`) |
+
+The response does not pass back through routes: the controller sends it
+directly with `res.status(...).json(...)`.
+
+When a rule fails, the service throws an error with a `code` (for example
+`HOLD_NOT_FOUND`). The controller maps that code to an HTTP status and sends
+`{ success: false, error: { code, message } }` instead.
 
 ---
 
