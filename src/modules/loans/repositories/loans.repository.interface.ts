@@ -131,9 +131,11 @@ LIMIT $4::int OFFSET $5::int
     // ONE transaction for the whole batch (all or nothing), so it is one method and not many small ones.
     // Return Entity if success, else null (a copy is no longer available when the rows are locked).
 
-// sql hints from claude AI, in this order inside BEGIN ... COMMIT (ROLLBACK + return null if step 1 finds a blocked copy)
+// SQL outline inside BEGIN ... COMMIT (ROLLBACK + return null if step 1 finds a blocked copy)
 /*
--- 0. once: CREATE SEQUENCE borrow_code_seq START 2001;   (so two counters can never generate the same code)
+-- 0. serialize borrow-code generation across concurrent checkout transactions
+SELECT pg_advisory_xact_lock(73113, 1);
+-- Read the latest BR-<number> suffix and assign the next codes while this lock is held.
 
 -- 1. lock the copies and re-check them: every row must be 'Available', or 'Reserved' with holdStudentId = studentId
 SELECT pc.copy_code AS "copyCode", pc.state AS "state", h.student_id AS "holdStudentId"
@@ -144,9 +146,9 @@ FOR UPDATE OF pc;
 
 -- 2. one loan per copy
 INSERT INTO loans (borrow_code, student_id, copy_id, due_date)
-SELECT 'BR-' || nextval('borrow_code_seq'), $1::int, pc.id, i.due_date
-FROM unnest($2::text[], $3::date[]) AS i(copy_code, due_date)
-JOIN physical_copies pc ON pc.copy_code = i.copy_code
+SELECT $1, $2::int, pc.id, $4::date
+FROM physical_copies pc
+WHERE pc.copy_code = $3
 RETURNING id::text AS "_id", borrow_code AS "borrowCode", copy_id::text AS "copyId", due_date::text AS "dueDate";
 
 -- 3. copies -> Borrowed
@@ -169,7 +171,7 @@ WHERE id = $1::int RETURNING active_loans_count AS "loansNow";
         conditionNote?: string | undefined;
     }): Promise<ReturnLoanResultEntity | null>;
     // ONE transaction. Return Entity if success, else null (loan not Active any more).
-    // NOTE: the `loans` table has no column for conditionNote. Add one (e.g. loans.return_note TEXT) or write it to physical_copies.notes.
+    // conditionNote is persisted in loans.return_condition_note to preserve the return history.
 
 // sql hints from claude AI, in this order inside BEGIN ... COMMIT
 /*

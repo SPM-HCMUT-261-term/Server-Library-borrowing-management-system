@@ -167,7 +167,7 @@ export type ReturnLoanResultEntity = {
     dueDate: string,
     returnedAt: string,
     returnCondition: CopyCondition,
-    conditionNote: string | null, // the loans table has no column for it yet, see the note in the repository interface
+    conditionNote: string | null,
     copyCode: string,
     copyNewState: "Available" | "Damaged" | "Lost",
     copyHomeLocation: string
