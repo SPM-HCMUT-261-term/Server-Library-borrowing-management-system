@@ -51,11 +51,11 @@ class LoansService {
         private readonly borrowersRepository: BorrowersRepository,
         private readonly loanCopiesRepository: LoanCopiesRepository,
         private readonly loanHoldsRepository: LoanHoldsRepository
-    ) {}
+    ) { }
 
     // ------------------------------------------------------------------ staff: checkout
 
-    public findStudentForCheckout(_accountId: string): void // will replace by return type
+    public async findStudentForCheckout(accountId: string) // will replace by return type
     {
         // 1. get the borrower by accountId, none -> STUDENT_NOT_FOUND
         // 2. get the ready holds with borrower._id (the _id, not the accountId)
@@ -73,8 +73,6 @@ class LoansService {
         //   activeHolds[].copyCode          <- copy.copyCode, null when copy is null
         //   activeHolds[].bookTitle         <- book.title
         //   activeHolds[].collectBy         timestamp text -> ISO
-
-        /*
         const borrower = await this.borrowersRepository.getBorrowerWithStatsByAccountId(accountId);
         if (!borrower) throw serviceError("STUDENT_NOT_FOUND", "Student account not found");
         const holds = await this.loanHoldsRepository.getReadyHoldsByStudentId(borrower._id);
@@ -117,13 +115,12 @@ class LoansService {
                 collectBy: new Date(hold.collectBy).toISOString()
             }))
         };
-        */
     }
 
-    public checkCopyForCheckout(_params: {
+    public async checkCopyForCheckout(params: {
         copyCode: string;
         studentAccountId: string;
-    }): void // will replace by return type
+    })// will replace by return type
     {
         // 1. get the copy by copyCode, none -> COPY_NOT_FOUND
         // 2. a blocked copy is still a 200 answer (canAdd false + blockingInfo), only a missing copy is an error
@@ -143,8 +140,6 @@ class LoansService {
         //   blockingInfo                only when canAdd is false: reasonCode, message, and currentBorrower* / currentDueDate
         //                               (filled only for ALREADY_BORROWED, from activeLoan, else null)
         //   defaultDueDate              today + DEFAULT_LOAN_DAYS, returned even when the copy is blocked
-
-        /*
         const { copyCode, studentAccountId } = params;
         const [copy] = await this.loanCopiesRepository.getCopiesForCheckoutByCopyCodes([copyCode]);
         if (!copy) throw serviceError("COPY_NOT_FOUND", "Physical copy not found");
@@ -220,13 +215,12 @@ class LoansService {
             associatedHold,
             blockingInfo
         };
-        */
     }
 
-    public issueBooks(_params: {
+    public async issueBooks(params: {
         studentAccountId: string;
         items: { copyCode: string; dueDate: string }[];
-    }): void // will replace by return type
+    }) // will replace by return type
     {
         // Check in this order, throw at the first failure:
         //   1. the same copyCode twice in items                         DUPLICATE_COPY_IN_BATCH
@@ -251,8 +245,6 @@ class LoansService {
         //   borrowerSummary.studentId            <- borrower._id
         //   borrowerSummary.loansBefore / loansNow  <- receipt
         //   borrowerSummary.remainingLoanSpace   maxLoansLimit - loansNow, not below 0
-
-        /*
         const { studentAccountId, items } = params;
         const copyCodes = items.map((item) => item.copyCode);
         if (new Set(copyCodes).size !== copyCodes.length) {
@@ -314,12 +306,11 @@ class LoansService {
                 }
             }
         };
-        */
     }
 
     // ------------------------------------------------------------------ staff: return
 
-    public findActiveLoanByCopy(_copyCode: string): void // will replace by return type
+    public async findActiveLoanByCopy(copyCode: string)// will replace by return type
     {
         // 1. get the active loan by copyCode, none -> ACTIVE_LOAN_NOT_FOUND (the copy does not exist or is not on loan: same answer)
         // 2. an overdue loan is NOT an error here, it only shows in isOverdue / timingBadge
@@ -337,8 +328,6 @@ class LoansService {
         //   copy.currentCondition                   <- copy.condition
         //   borrower.activeLoansBeforeReturn        <- borrower.activeLoansCount
         //   borrower.activeLoansAfterReturn         activeLoansCount - 1, not below 0
-
-        /*
         const loan = await this.loansRepository.getActiveLoanWithDetailByCopyCode(copyCode);
         if (!loan) throw serviceError("ACTIVE_LOAN_NOT_FOUND", "This copy does not have an active loan");
 
@@ -375,14 +364,13 @@ class LoansService {
                 maxLoansLimit: loan.borrower.maxLoansLimit
             }
         };
-        */
     }
 
-    public returnBook(_params: {
+    public async returnBook(params: {
         id: string; // loan _id or borrowCode
         condition: "Good" | "Damaged" | "Lost";
         conditionNote?: string | undefined;
-    }): void // will replace by return type
+    }) // will replace by return type
     {
         // 1. get the loan by id or borrowCode, none -> LOAN_NOT_FOUND
         // 2. loan.status is "Returned" -> LOAN_ALREADY_RETURNED
@@ -401,8 +389,6 @@ class LoansService {
         //   copy.newState            <- copyNewState
         //   copy.homeLocation        <- copyHomeLocation
         //   returnedAt               timestamp text -> ISO
-
-        /*
         const { id, condition, conditionNote } = params;
         const loan = await this.loansRepository.getLoanWithDetailByIdOrBorrowCode(id);
         if (!loan) throw serviceError("LOAN_NOT_FOUND", "Loan not found");
@@ -435,12 +421,11 @@ class LoansService {
                 }
             }
         };
-        */
     }
 
     // ------------------------------------------------------------------ staff: records
 
-    public getLoanRecords(_params: {
+    public async getLoanRecords(params: {
         tab?: "active" | "returned" | undefined;
         q?: string | undefined;
         status?: "all" | "overdue" | "due_soon" | "on_loan" | undefined;
@@ -448,7 +433,7 @@ class LoansService {
         sortOrder?: "asc" | "desc" | undefined;
         page?: number | undefined;
         limit?: number | undefined;
-    }): void // will replace by return type
+    })// will replace by return type
     {
         // 1. defaults: tab "active", sortBy "dueDate", sortOrder "asc", page 1, limit DEFAULT_PAGE_LIMIT (never above MAX_PAGE_LIMIT)
         // 2. conflicts: status is only for the active tab, status "all" and an empty q are passed as undefined,
@@ -470,8 +455,6 @@ class LoansService {
         //   pagination.totalPages   ceil(totalItem / limit), 0 rows gives 0 (ask the FE dev if it must be 1)
         // Open: a loan due today shows "On loan" (add "Due today" if the FE dev wants it).
         // Open: the old SQL `due_soon` is today..today+2 but the badge only says "Due tomorrow": change the SQL `+ 2` to `+ 1`.
-
-        /*
         const tab = params.tab ?? "active";
         const page = params.page ?? 1;
         const limit = Math.min(params.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
@@ -516,12 +499,11 @@ class LoansService {
                 limit
             }
         };
-        */
     }
 
     // ------------------------------------------------------------------ student
 
-    public getMyBorrowing(_studentId: string): void // userId from the session, not accountId
+    public async getMyBorrowing(studentId: string)// userId from the session, not accountId
     {
         // 1. get the borrower by id, none -> STUDENT_NOT_FOUND
         // 2. these three do not depend on each other, run them together with Promise.all:
@@ -551,8 +533,6 @@ class LoansService {
         //   holdRequests[].requestedAt / collectBy   timestamp text -> ISO
         //   borrowingHistory[].copyCode         <- copy.copyCode
         //   borrowingHistory[].returnedAt       timestamp text -> ISO
-
-        /*
         const borrower = await this.borrowersRepository.getBorrowerWithStatsById(studentId);
         if (!borrower) throw serviceError("STUDENT_NOT_FOUND", "Student account not found");
 
@@ -634,13 +614,12 @@ class LoansService {
                 returnCondition: loan.returnCondition
             }))
         };
-        */
     }
 
-    public renewLoan(_params: {
+    public async renewLoan(params: {
         id: string; // loan _id or borrowCode
         studentId: string; // userId from the session
-    }): void // will replace by return type
+    }) // will replace by return type
     {
         // 1. get the loan by id or borrowCode. None, or loan.borrower._id !== studentId -> LOAN_NOT_FOUND
         //    (never answer 403 for another student's loan, that would reveal it exists)
@@ -658,8 +637,6 @@ class LoansService {
         //   message     "Loan renewed for <RENEWAL_EXTRA_DAYS> days"
         //   daysLeft    newDueDate - today
         //   canRenew    false, the one allowed renewal is used (do not compute the reason again)
-
-        /*
         const { id, studentId } = params;
         const loan = await this.loansRepository.getLoanWithDetailByIdOrBorrowCode(id);
         if (!loan || loan.borrower._id !== studentId) throw serviceError("LOAN_NOT_FOUND", "Loan not found");
@@ -694,7 +671,6 @@ class LoansService {
                 canRenew: false
             }
         };
-        */
     }
 }
 

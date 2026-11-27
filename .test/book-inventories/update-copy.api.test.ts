@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { pathOf } from "../helpers/api-client.js";
 import { expectApiError, expectValidationError } from "../helpers/assertions.js";
+import { pathOf } from "../helpers/client.js";
 import { guest, resetDatabase, signInAs } from "../helpers/session.js";
 import { AVAILABLE_COPY_BODY, BOOK_ID, COPY, COPY_ID, UNKNOWN_COPY } from "./fixtures.js";
 
@@ -16,14 +16,16 @@ describe("PUT /copies/:id", () => {
     it("[UPDATE-COPY-01] by barcode: marks an available copy damaged", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.put(copyPath(COPY.midnightAvailable), {
-            homeLocation: "REPAIR-SHELF",
-            state: "Damaged",
-            condition: "Damaged",
-            notes: "Cover torn"
-        });
+        const res = await staff
+            .put(copyPath(COPY.midnightAvailable))
+            .send({
+                homeLocation: "REPAIR-SHELF",
+                state: "Damaged",
+                condition: "Damaged",
+                notes: "Cover torn"
+            })
+            .expect(200);
 
-        expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
         expect(res.body.data.copy).toMatchObject({
             _id: COPY_ID.midnightAvailable,
@@ -48,13 +50,11 @@ describe("PUT /copies/:id", () => {
     it("[UPDATE-COPY-02] by numeric id", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.put(copyPath(COPY_ID.midnightAvailable), {
-            homeLocation: "FIC HAI · A3",
-            state: "Lost",
-            condition: "Lost"
-        });
+        const res = await staff
+            .put(copyPath(COPY_ID.midnightAvailable))
+            .send({ homeLocation: "FIC HAI · A3", state: "Lost", condition: "Lost" })
+            .expect(200);
 
-        expect(res.status).toBe(200);
         expect(res.body.data).toMatchObject({
             copy: { copyCode: COPY.midnightAvailable, state: "Lost" },
             updatedStockSummary: { availableCopies: 1, lostCopies: 1 }
@@ -64,13 +64,11 @@ describe("PUT /copies/:id", () => {
     it("[UPDATE-COPY-03] a copy with only a returned loan can be edited", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.put(copyPath(COPY.midnightReturnedLoan), {
-            homeLocation: "FIC HAI · A3",
-            state: "Lost",
-            condition: "Lost"
-        });
+        const res = await staff
+            .put(copyPath(COPY.midnightReturnedLoan))
+            .send({ homeLocation: "FIC HAI · A3", state: "Lost", condition: "Lost" })
+            .expect(200);
 
-        expect(res.status).toBe(200);
         expect(res.body.data.copy).toMatchObject({
             copyCode: COPY.midnightReturnedLoan,
             state: "Lost",
@@ -82,26 +80,31 @@ describe("PUT /copies/:id", () => {
         it("[UPDATE-COPY-04] an omitted notes field keeps the stored note", async () => {
             // Checks the undefined-vs-null fix in updatePhysicalCopy.
             const staff = await signInAs("staff");
-            const setup = await staff.put(copyPath(COPY.midnightAvailable), { ...AVAILABLE_COPY_BODY, notes: "Temporary note" });
-            expect(setup.status).toBe(200);
+            await staff
+                .put(copyPath(COPY.midnightAvailable))
+                .send({ ...AVAILABLE_COPY_BODY, notes: "Temporary note" })
+                .expect(200);
 
-            const res = await staff.put(copyPath(COPY.midnightAvailable), {
-                ...AVAILABLE_COPY_BODY,
-                homeLocation: "FIC HAI · A4"
-            });
+            const res = await staff
+                .put(copyPath(COPY.midnightAvailable))
+                .send({ ...AVAILABLE_COPY_BODY, homeLocation: "FIC HAI · A4" })
+                .expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.data.copy).toMatchObject({ homeLocation: "FIC HAI · A4", notes: "Temporary note" });
         });
 
         it("[UPDATE-COPY-05] notes: null clears the stored note", async () => {
             const staff = await signInAs("staff");
-            const setup = await staff.put(copyPath(COPY.midnightAvailable), { ...AVAILABLE_COPY_BODY, notes: "Temporary note" });
-            expect(setup.status).toBe(200);
+            await staff
+                .put(copyPath(COPY.midnightAvailable))
+                .send({ ...AVAILABLE_COPY_BODY, notes: "Temporary note" })
+                .expect(200);
 
-            const res = await staff.put(copyPath(COPY.midnightAvailable), { ...AVAILABLE_COPY_BODY, notes: null });
+            const res = await staff
+                .put(copyPath(COPY.midnightAvailable))
+                .send({ ...AVAILABLE_COPY_BODY, notes: null })
+                .expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.data.copy.notes).toBeNull();
         });
     });
@@ -109,7 +112,7 @@ describe("PUT /copies/:id", () => {
     it("[UPDATE-COPY-06] a borrowed copy cannot be changed", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.put(copyPath(COPY.midnightBorrowed), {
+        const res = await staff.put(copyPath(COPY.midnightBorrowed)).send({
             homeLocation: "FIC HAI · A3",
             state: "Damaged",
             condition: "Damaged"
@@ -121,7 +124,7 @@ describe("PUT /copies/:id", () => {
     it("[UPDATE-COPY-07] returns 404 for an unknown barcode", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.put(copyPath(UNKNOWN_COPY), { homeLocation: "ANY", state: "Available", condition: "Good" });
+        const res = await staff.put(copyPath(UNKNOWN_COPY)).send({ homeLocation: "ANY", state: "Available", condition: "Good" });
 
         expectApiError(res, 404, "COPY_NOT_FOUND");
         expect(res.body.error.message).toBe("Physical copy not found");
@@ -131,7 +134,7 @@ describe("PUT /copies/:id", () => {
         it("[UPDATE-COPY-08] Borrowed cannot be set by hand", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.put(copyPath(COPY.midnightAvailable), { ...AVAILABLE_COPY_BODY, state: "Borrowed" });
+            const res = await staff.put(copyPath(COPY.midnightAvailable)).send({ ...AVAILABLE_COPY_BODY, state: "Borrowed" });
 
             expectValidationError(res, "state");
         });
@@ -139,15 +142,14 @@ describe("PUT /copies/:id", () => {
 
     describe("access", () => {
         it("[UPDATE-COPY-09] a guest gets 401 UNAUTHORIZED", async () => {
-            const res = await guest().put(copyPath(COPY.midnightAvailable), AVAILABLE_COPY_BODY);
+            const res = await guest().put(copyPath(COPY.midnightAvailable)).send(AVAILABLE_COPY_BODY).expect(401);
 
-            expect(res.status).toBe(401);
             expect(res.body.error.code).toBe("UNAUTHORIZED");
         });
 
         // KNOWN BUG: same as LIST-24, the 401 body has no `success: false`.
         it.fails("[UPDATE-COPY-09] the 401 body uses the error envelope with success: false", async () => {
-            const res = await guest().put(copyPath(COPY.midnightAvailable), AVAILABLE_COPY_BODY);
+            const res = await guest().put(copyPath(COPY.midnightAvailable)).send(AVAILABLE_COPY_BODY);
 
             expectApiError(res, 401, "UNAUTHORIZED");
         });
@@ -155,7 +157,7 @@ describe("PUT /copies/:id", () => {
         it("[UPDATE-COPY-10] a student is not allowed", async () => {
             const student = await signInAs("student");
 
-            const res = await student.put(copyPath(COPY.midnightAvailable), AVAILABLE_COPY_BODY);
+            const res = await student.put(copyPath(COPY.midnightAvailable)).send(AVAILABLE_COPY_BODY);
 
             expectApiError(res, 403, "FORBIDDEN_ACCESS");
         });

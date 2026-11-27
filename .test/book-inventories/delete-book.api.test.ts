@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import type { ApiClient } from "../helpers/api-client.js";
 import { expectApiError } from "../helpers/assertions.js";
+import type { Client } from "../helpers/client.js";
 import { resetDatabase, signInAs } from "../helpers/session.js";
 import { BOOK_ID, NEW_BOOK, UNKNOWN_ID } from "./fixtures.js";
 
 // DELETE /books/:id: staff delete a title. Allowed only when it has no copies and no loan history.
 
 /** Creates NEW_BOOK (no copies) and returns its id. */
-async function createBookWithoutCopies(staff: ApiClient): Promise<string> {
-    const res = await staff.post("/books", NEW_BOOK);
+async function createBookWithoutCopies(staff: Client): Promise<string> {
+    const res = await staff.post("/books").send(NEW_BOOK);
     expect(res.status, `setup: POST /books returned ${res.status}: ${res.text}`).toBe(201);
     return res.body.data._id as string;
 }
@@ -37,17 +37,15 @@ describe("DELETE /books/:id", () => {
         const staff = await signInAs("staff");
         const newBookId = await createBookWithoutCopies(staff);
 
-        const res = await staff.delete(`/books/${newBookId}`);
+        const res = await staff.delete(`/books/${newBookId}`).expect(200);
 
-        expect(res.status).toBe(200);
         expect(res.body).toEqual({ success: true, message: "Book title deleted successfully" });
     });
 
     it("[DELETE-BOOK-04] the deleted title is gone", async () => {
         const staff = await signInAs("staff");
         const newBookId = await createBookWithoutCopies(staff);
-        const deleted = await staff.delete(`/books/${newBookId}`);
-        expect(deleted.status).toBe(200);
+        await staff.delete(`/books/${newBookId}`).expect(200);
 
         const res = await staff.get(`/books/${newBookId}`);
 

@@ -1,11 +1,11 @@
 # Book-inventories API tests
 
-These are end-to-end tests for the 9 book-inventories endpoints. Each test sends **real HTTP requests** to the main server, which you start yourself, and checks the responses with Vitest.
+These are end-to-end tests for the 9 book-inventories endpoints. Each test sends **real HTTP requests** with [supertest](https://github.com/ladjs/supertest) to the main server, which you start yourself. Vitest runs the tests and checks the JSON bodies.
 
 They follow the same pattern as the repository tests in `src/modules/*/repositories/*.test.ts`:
 - `describe` per endpoint;
 - `beforeEach` resets the data;
-- each `it` arranges, sends one request, and asserts with `expect(...)`.
+- each `it` arranges, sends one request with supertest, and asserts with `.expect(status)` and `expect(...)`.
 
 The cases are the ones in `.temp/.temp-test-data/book-inventories.test/book-inventories.test.json`, rewritten as TypeScript. Each test name starts with the original case id (for example `[LIST-03]`), so you can match the Vitest output with the Postman runs.
 
@@ -107,7 +107,13 @@ Keep the server running in the **other** window, the one opened at the repositor
 
 `npm test` and `npm run test:run` still run only the unit and repository tests in `src/`, so they don't need a running server.
 
-If the server is not reachable, or the reset route is off, the run stops before any test with one message that says why. For example: `ECONNREFUSED (is the main server running? npm run dev:test)`, or `POST /dev/reset-db is not mounted: start the main server with ENABLE_DB_RESET=true`.
+If the server is not reachable, or the reset route is off, the run stops before any test with one message that says why. For example:
+```text
+API tests cannot start against http://localhost:3000/api/v1
+  ECONNREFUSED: Connection refused
+  Start the main server first: npm run dev:test (with ENABLE_DB_RESET=true in .env.test.local).
+```
+or `POST /dev/reset-db is not mounted: start the main server with ENABLE_DB_RESET=true`.
 
 ---
 
@@ -119,33 +125,39 @@ If the server is not reachable, or the reset route is off, the run stops before 
 ├── tsconfig.json
 ├── helpers/
 │   ├── config.ts
-│   ├── api-client.ts
+│   ├── client.ts
 │   ├── session.ts
 │   ├── assertions.ts
+│   ├── dates.ts
+│   ├── borrowing.ts
 │   └── global-setup.ts
-└── book-inventories/
-    ├── README.md
-    ├── fixtures.ts
-    └── *.api.test.ts   (9 files, one per endpoint)
+├── book-inventories/
+│   ├── README.md
+│   ├── fixtures.ts
+│   └── *.api.test.ts   (9 files, one per endpoint)
+├── holds/              (see holds/README.md)
+└── loans/              (see loans/README.md)
 ```
 
 ### `.test/`: shared by every module
 
-The files here are not specific to book-inventories. Later modules such as `.test/holds/` and `.test/loans/` reuse them.
+The files here are not specific to book-inventories. `.test/holds/` and `.test/loans/` use them too.
 
 | File | What it holds |
 |---|---|
 | `vitest.config.ts` | Vitest config for the API tests only. It runs `**/*.api.test.ts`, one file at a time, with 20 s timeouts and the global setup. |
-| `tsconfig.json` | Type-checking for `.test/`. The root `tsconfig.json` excludes `.test`, so `npm run build` never compiles these files. |
+| `tsconfig.json` | Type-checking for `.test/` (`npx tsc -p .test`). The root `tsconfig.json` excludes `.test`, so `npm run build` never compiles these files. |
 
 ### `.test/helpers/`: tools the tests import
 
 | File | Exports | Purpose |
 |---|---|---|
 | `config.ts` | `API_CONFIG` | Base URL, reset and login paths, cookie name, request timeout. |
-| `api-client.ts` | `ApiClient`, `pathOf()` | Sends requests with `fetch` and keeps the session cookie. `pathOf()` fills and URL-encodes `:params`. |
-| `session.ts` | `resetDatabase()`, `signInAs()`, `guest()`, `ACCOUNT` | Resets the data, signs in or out, and lists the `init.sql` user accounts. |
-| `assertions.ts` | `expectApiError()`, `expectValidationError()`, `titlesOf()` | Short checks for the error envelope and for title order. |
+| `client.ts` | `Client`, `newClient()`, `pathOf()` | `newClient()` creates a supertest agent (`request.agent(baseUrl)`) that keeps the session cookie, sends `Accept: application/json` and times out after 10 s. `pathOf()` fills and URL-encodes `:params`. |
+| `session.ts` | `resetDatabase()`, `signInAs()`, `guest()`, `ACCOUNT` | Resets the data, signs in (returns a signed-in agent) or gives a guest agent, and lists the `init.sql` user accounts. |
+| `assertions.ts` | `expectApiError()`, `expectValidationError()`, `expectForbidden()`, `expectUnauthorized()`, `titlesOf()` | Short checks on a supertest `Response`: the error envelope, wrong-role and no-session responses, and title order. |
+| `dates.ts` | `isoDateFromToday()`, `addDays()`, `daysBetween()`, `expectDateNearToday()` | Calendar-date helpers for due dates; `expectDateNearToday()` allows ±1 day for the server's time zone. |
+| `borrowing.ts` | `SEED_LOAN`, `SEED_STUDENT`, `BOOK`, `AVAILABLE_COPY`, `NEW_STUDENT`, `createStudent()`, `issueBooks()`, `placeHold()`, `copyInCatalog()` | Used by holds and loans: `init.sql` loan facts and helpers that build a borrowing state through the API. |
 | `global-setup.ts` | (default export) | Runs once before every test: checks that the server and the reset route work. |
 
 ### `.test/book-inventories/`: this module
@@ -181,92 +193,180 @@ describe("GET /books", () => {
     beforeEach(resetDatabase);                       // 1. POST /dev/reset-db → init.sql data
 
     it("[LIST-03] finds a title by author ...", async () => {
-        const student = await signInAs("student");   // 2. POST /auth/login → keeps connect.sid
+        const student = await signInAs("student");   // 2. POST /auth/login → agent keeps connect.sid
 
-        const res = await student.get("/books", {    // 3. the request under test
-            query: { q: "hawking" }
-        });
+        const res = await student                    // 3. the request under test (supertest)
+            .get("/books")
+            .query({ q: "hawking" })
+            .expect(200);                            //    supertest checks the status
 
-        expect(res.status).toBe(200);                // 4. assertions on status and JSON body
-        expect(res.body).toMatchObject({ ... });
+        expect(res.body).toMatchObject({ ... });     // 4. Vitest checks the JSON body
     });
 });
 ```
 
 1. **Reset.** `beforeEach(resetDatabase)` gives every test the same `init.sql` data. `RESTART IDENTITY` makes ids predictable: books 1–10, copies 1–25. The numbers are in `fixtures.ts`.
-2. **Sign in.** `signInAs(role, accountId?)` logs in and returns an `ApiClient` that sends the session cookie on every request. `guest()` returns a client with no cookie. Each client is its own session, so clients never share cookies and a guest needs no logout.
-3. **Request.** `client.get / post / put / delete(path, body?, { query, headers })`. `res.body` is the parsed JSON, `res.text` the raw text, `res.status` the status code.
+2. **Sign in.** `signInAs(role, accountId?)` logs in and returns a supertest **agent** that sends the session cookie on every later request. `guest()` returns an agent with no cookie. Each agent is its own session, so agents never share cookies and a guest needs no logout.
+3. **Request.** The supertest chain:
+
+   | Step | Syntax |
+   |---|---|
+   | Method and path (relative to `/api/v1`) | `agent.get(path)`, `.post(path)`, `.put(path)`, `.delete(path)` |
+   | Query string | `.query({ page: 2, q: "wo" })` |
+   | JSON body | `.send({ title: "..." })` |
+   | Expected status | `.expect(200)`: the request fails, and so does the test, when the status differs |
+
+   `await` the chain to get the response: `res.status` is the status code, `res.body` the parsed JSON, `res.text` the raw text. supertest does **not** fail on a 4xx or 5xx status by itself. Only `.expect(...)` and network errors make it fail.
 4. **Assert.**
+   - A success case chains `.expect(<status>)`, then checks the body with Vitest's `expect(res.body)`.
+   - An error case does not chain `.expect(...)`. It passes the response to a helper, which checks the status and the error envelope together:
+     - `expectApiError(res, 409, "DUPLICATE_ISBN")` checks the error envelope and status.
+     - `expectValidationError(res, "author")` checks for a 400 with `error.details["author"]`. Keys are plain field names on every endpoint, with no `body.` or `params.` prefix.
    - `toMatchObject` checks only the listed fields; arrays must have the same length.
    - `toEqual` checks the exact value.
    - `not.toHaveProperty("x")` checks that a field is absent.
    - `expect.any(String)` accepts any string.
-   - Helpers:
-     - `expectApiError(res, 409, "DUPLICATE_ISBN")` checks the error envelope and status.
-     - `expectValidationError(res, "author")` checks for a 400 with `error.details["author"]`. Keys are plain field names on every endpoint, with no `body.` or `params.` prefix.
 
-Multi-step cases, which the Postman data wrote as `setup`, are now plain code inside the test. For example, `DELETE-BOOK-04` creates a book, deletes it, then expects the `GET` to return 404.
+Multi-step cases, which the Postman data wrote as `setup`, are now plain code inside the test. For example, `DELETE-BOOK-04` creates a book, deletes it (`.expect(200)`), then expects the `GET` to return 404.
 
 Files run one after another, never in parallel, because they all reset the same database.
 
-## Call graph (temporary)
+## Call graph
 
-> Temporary section, for understanding the code. Delete it when it is no longer needed.
+How to read the trees:
+- Each line is one call. The lines under it are the calls it makes, in order.
+- After `#` comes `[where the code is]` and what the call does. Paths without `src/` are in `.test/`.
+- `[server …]` is the HTTP request reaching the main server, with the file in `src/` that answers it.
+- A helper is drawn in full once, in [Building blocks](#building-blocks). Later trees show it as one line.
 
-### What runs, in order
+### Before the tests
 
-```
-npm run test:api:books
-└─ vitest run --config .test/vitest.config.ts book-inventories
-   │
-   ├─ 1. globalSetup: helpers/global-setup.ts → setup()                  once per run
-   │     └─ resetDatabase()                                              helpers/session.ts
-   │          └─ new ApiClient().post("/dev/reset-db")                   helpers/api-client.ts
-   │               └─ request()                                          (see "Inside ApiClient.request" below)
-   │     on error → throws "API tests cannot start against <url> ..." → the run stops
-   │
-   └─ 2. for each *.api.test.ts, one file at a time (fileParallelism: false)
-         └─ describe("<METHOD> <path>")
-              │
-              ├─ beforeEach → resetDatabase()                            before every it()
-              │                 └─ ApiClient.post("/dev/reset-db") → request()
-              │
-              └─ it("[ID] ...")
-                   ├─ a. who sends the request
-                   │     ├─ signInAs(role, accountId?)                   helpers/session.ts
-                   │     │    ├─ new ApiClient()
-                   │     │    ├─ client.post("/auth/login", { accountId, password, role }) → request()
-                   │     │    └─ checks status 200 and client.sessionCookie, otherwise throws
-                   │     └─ or guest() → new ApiClient()                 no cookie
-                   │
-                   ├─ b. optional preparation inside the test
-                   │     e.g. createBookWithoutCopies(staff)             delete-book.api.test.ts
-                   │          └─ staff.post("/books", NEW_BOOK) → request()
-                   │
-                   ├─ c. the request under test
-                   │     client.get | post | put | delete(path, body?, { query })
-                   │       └─ request()
-                   │     path = `/books/${BOOK_ID.x}`, or pathOf("/copies/:id", { id })    helpers/api-client.ts
-                   │
-                   └─ d. assertions
-                         ├─ expect(res.status) / expect(res.body)...      vitest
-                         ├─ expectApiError(res, status, code)             helpers/assertions.ts
-                         ├─ expectValidationError(res, field)
-                         │    └─ expectApiError(res, 400, "VALIDATION_ERROR") + details[field]
-                         └─ titlesOf(items)
+Once per run:
+
+```text
+npm run test:api:books    # [package.json] vitest run --config .test/vitest.config.ts book-inventories
+└── setup()               # [helpers/global-setup.ts] globalSetup, runs once before any test file
+    └── resetDatabase()   # [helpers/session.ts] first reset; if it fails, one clear error stops the run
 ```
 
-### Inside `ApiClient.request()`
+Before every `it()`:
 
+```text
+beforeEach(resetDatabase)                           # [*.api.test.ts] registered at the top of each describe()
+└── resetDatabase()                                 # [helpers/session.ts] resets the data; throws unless the status is 200
+    ├── newClient()                                 # [helpers/client.ts] a new supertest agent with no cookie
+    │   ├── request.agent(API_CONFIG.baseUrl)       # [supertest] agent for http://localhost:<port>/api/v1
+    │   ├── .set("Accept", "application/json")      # [supertest] default header of every request
+    │   └── .timeout(API_CONFIG.requestTimeoutMs)   # [supertest] 10 s per request
+    └── .post(API_CONFIG.resetPath)                 # [supertest] sends the reset request
+        └── POST /api/v1/dev/reset-db               # [server dev-tools.routes.ts] TRUNCATE the app tables, run init.sql
 ```
-request(method, path, body?, { query, headers })
-├─ new URL(baseUrl + path), add each query key        baseUrl = API_CONFIG.baseUrl (config.ts)
-├─ headers: Accept, Cookie (if signed in), Content-Type (if body)
-├─ fetch(url, { method, headers, body: JSON, signal: AbortSignal.timeout(10 s) })
-│    └─ on network error / timeout → describeFetchError() → throw Error("<METHOD> <url> failed: ...")
-├─ #rememberSessionCookie(response)                   keeps "connect.sid=..." from Set-Cookie
-├─ response.text() → parseJson()                      undefined when empty or not JSON
-└─ returns { status, headers, body, text }
+
+### Building blocks
+
+```text
+signInAs(role, accountId?)                    # [helpers/session.ts] logs in, returns the signed-in agent
+├── newClient()                               # [helpers/client.ts] a new agent (see beforeEach)
+├── .post(API_CONFIG.loginPath).send({...})   # [supertest] { accountId, password123, role }; the agent keeps the cookie
+│   └── POST /api/v1/auth/login               # [server auth.controller.ts login()] creates the session
+└── setsSessionCookie(response)               # [helpers/session.ts] throws unless Set-Cookie has connect.sid
+guest()                                       # [helpers/session.ts] an agent that never logs in
+└── newClient()                               # [helpers/client.ts] a new agent (see beforeEach)
+```
+
+### Scenarios inside `it()`
+
+Each tree shows one example test. The other tests of the same scenario call the same functions with other values.
+
+#### 1. Read a list or a detail
+
+Used by FEAT-01…03, LIST-01…11, 13…16, 18, 19, 21, 22, DETAIL-01…06.
+
+```text
+it("[LIST-02] page 2 holds the last 4 titles")           # [list-books.api.test.ts]
+├── signInAs("staff")                                    # [helpers/session.ts] "student" in some cases
+├── staff.get("/books").query({ page: 2 }).expect(200)   # [supertest] fails the test on another status
+│   └── GET /api/v1/books?page=2                         # [server book-inventories.routes.ts] searches the catalog
+├── titlesOf(res.body.data.items)                        # [helpers/assertions.ts] the titles, to check their order
+└── expect(...).toEqual(...)                             # [vitest] titles and pagination
+```
+
+#### 2. Create, update or delete
+
+Used by CREATE-01, 02, UPDATE-01…03, ADD-COPY-01…03, UPDATE-COPY-01…03, DELETE-COPY-01, 02.
+
+```text
+it("[UPDATE-COPY-01] by barcode: marks an available copy damaged")   # [update-copy.api.test.ts]
+├── signInAs("staff")                                                # [helpers/session.ts]
+├── copyPath(COPY.midnightAvailable)                                 # [update-copy.api.test.ts] "/copies/WB-00421"
+│   └── pathOf("/copies/:id", { id })                                # [helpers/client.ts] fills and URL-encodes :id
+├── staff.put(path).send({...}).expect(200)                          # [supertest] JSON body; a create uses .post(...).expect(201)
+│   └── PUT /api/v1/copies/WB-00421                                  # [server book-inventories.routes.ts] updates the copy
+└── expect(res.body.data.copy).toMatchObject({...})                  # [vitest] saved fields and stock summary
+```
+
+#### 3. Several requests in one test
+
+Used by DELETE-BOOK-03, 04, DELETE-COPY-03, UPDATE-COPY-04, 05.
+
+```text
+it("[DELETE-BOOK-04] the deleted title is gone")   # [delete-book.api.test.ts]
+├── signInAs("staff")                              # [helpers/session.ts]
+├── createBookWithoutCopies(staff)                 # [delete-book.api.test.ts] creates NEW_BOOK, returns its _id
+│   ├── staff.post("/books").send(NEW_BOOK)        # [supertest] setup request
+│   │   └── POST /api/v1/books                     # [server book-inventories.routes.ts] creates the title
+│   └── expect(res.status, message).toBe(201)      # [vitest] setup check; the message shows the body
+├── staff.delete(`/books/${id}`).expect(200)       # [supertest] setup request
+│   └── DELETE /api/v1/books/:id                   # [server book-inventories.routes.ts] deletes the title
+├── staff.get(`/books/${id}`)                      # [supertest] the request under test, no .expect
+│   └── GET /api/v1/books/:id                      # [server book-inventories.routes.ts] answers 404
+└── expectApiError(res, 404, "BOOK_NOT_FOUND")     # [helpers/assertions.ts] (see scenario 4)
+```
+
+#### 4. Error response (403, 404, 409)
+
+Used by CREATE-03, 07, UPDATE-04, 05, 08, DELETE-BOOK-01, 02, 05, ADD-COPY-04, 05, 08, UPDATE-COPY-06, 07, 10, DELETE-COPY-04…07, DETAIL-07, 08, LIST-25.
+
+```text
+it("[CREATE-03] a duplicate ISBN is a conflict")   # [create-book.api.test.ts]
+├── signInAs("staff")                              # [helpers/session.ts] "admin" or "student" in a 403 case
+├── staff.post("/books").send({...})               # [supertest] no .expect: a 4xx does not fail by itself
+│   └── POST /api/v1/books                         # [server book-inventories.routes.ts] answers 409 (403 from the role guard)
+├── expectApiError(res, 409, "DUPLICATE_ISBN")     # [helpers/assertions.ts] status and error envelope
+│   ├── expect(res.status).toBe(409)               # [vitest]
+│   └── expect(res.body).toMatchObject({...})      # [vitest] { success: false, error: { code } }
+└── expect(res.body.error.message).toBe(...)       # [vitest] exact message, only in some cases
+```
+
+#### 5. Validation error (400)
+
+Used by FEAT-04, 05, LIST-12, 17, 20, 23, CREATE-04…06, UPDATE-06, 07, ADD-COPY-06, 07, UPDATE-COPY-08.
+
+```text
+it("[CREATE-04] a blank title is rejected")                      # [create-book.api.test.ts]
+├── signInAs("staff")                                            # [helpers/session.ts]
+├── staff.post("/books").send({ ...WILD_ROBOT, title: "   " })   # [supertest] an invalid body (or .query() for GET)
+│   └── POST /api/v1/books                                       # [server book-inventories.controller.ts] the Zod check fails, 400
+└── expectValidationError(res, "title")                          # [helpers/assertions.ts] 400 with a message for that field
+    ├── expectApiError(res, 400, "VALIDATION_ERROR")             # [helpers/assertions.ts] (see scenario 4)
+    └── expect(details).toHaveProperty(["title"])                # [vitest] error.details.title is a string
+```
+
+#### 6. No session (401)
+
+Used by LIST-24, UPDATE-COPY-09, FEAT-06.
+
+```text
+it("[LIST-24] a guest gets 401 UNAUTHORIZED")                    # [list-books.api.test.ts]
+├── guest().get("/books").expect(401)                            # [supertest] a request without a cookie
+│   ├── guest()                                                  # [helpers/session.ts]
+│   └── GET /api/v1/books                                        # [server verification.middleware.ts] no session, 401
+└── expect(res.body.error.code).toBe("UNAUTHORIZED")             # [vitest]
+it.fails("[LIST-24] the 401 body uses the error envelope ...")   # [list-books.api.test.ts] known bug, see below
+├── guest().get("/books")                                        # [supertest] the same request, no .expect
+│   ├── guest()                                                  # [helpers/session.ts]
+│   └── GET /api/v1/books                                        # [server verification.middleware.ts] the 401 body has no success: false
+└── expectApiError(res, 401, "UNAUTHORIZED")                     # [helpers/assertions.ts] fails today, as it.fails expects
 ```
 
 ### Which file imports which
@@ -277,17 +377,18 @@ vitest.config.ts ··· (by path) ··········> helpers/global-setup.ts
 helpers/global-setup.ts ──> helpers/session.ts
                         └─> helpers/config.ts
 
-helpers/session.ts ───────> helpers/api-client.ts ──> helpers/config.ts
+helpers/session.ts ───────> helpers/client.ts ──> supertest
+                        │                     └─> helpers/config.ts
                         └─> helpers/config.ts
 
 helpers/assertions.ts ────> vitest (expect)
-                        └─> helpers/api-client.ts (type ApiResponse only)
+                        └─> supertest (type Response only)
 
 book-inventories/*.api.test.ts
   ├─> vitest (describe, it, beforeEach, expect)
   ├─> helpers/session.ts       resetDatabase, signInAs, guest, ACCOUNT
   ├─> helpers/assertions.ts    expectApiError, expectValidationError, titlesOf
-  ├─> helpers/api-client.ts    pathOf (copy tests), type ApiClient (delete-book)
+  ├─> helpers/client.ts        pathOf (copy tests), type Client (delete-book)
   └─> book-inventories/fixtures.ts   BOOK_ID, ISBN, COPY, COPY_ID, NEW_BOOK, ...
 ```
 
@@ -309,6 +410,7 @@ The status-code half of LIST-24 and UPDATE-COPY-09 is a normal `it`. It passes t
 
 1. Pick the file for the endpoint, or create `<name>.api.test.ts` for a new one, with `beforeEach(resetDatabase)`.
 2. Name the test `"[ID] what it checks"`.
-3. Put `init.sql` facts in `fixtures.ts` instead of repeating literal ids.
-4. Use `pathOf("/copies/:id", { id })` when an id may contain characters that need URL-encoding.
-5. If a test needs data that `init.sql` does not have, create it through the API inside the test, as `createBookWithoutCopies()` does in `delete-book.api.test.ts`. That keeps the test independent of other tests.
+3. Get an agent with `signInAs(role)` or `guest()`, then build the request with supertest: `.get/.post/.put/.delete(path)`, `.query({...})`, `.send({...})`, and `.expect(status)` for a success case.
+4. Put `init.sql` facts in `fixtures.ts` instead of repeating literal ids.
+5. Use `pathOf("/copies/:id", { id })` when an id may contain characters that need URL-encoding.
+6. If a test needs data that `init.sql` does not have, create it through the API inside the test, as `createBookWithoutCopies()` does in `delete-book.api.test.ts`. That keeps the test independent of other tests.

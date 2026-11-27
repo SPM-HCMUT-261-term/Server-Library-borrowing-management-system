@@ -15,9 +15,8 @@ describe("GET /books", () => {
         it("[LIST-01] returns page 1 with 6 titles sorted by title", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books");
+            const res = await staff.get("/books").expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.data.items).toHaveLength(6);
             expect(titlesOf(res.body.data.items).slice(0, 2)).toEqual(["A Brief History of Time", "A Wrinkle in Time"]);
@@ -27,9 +26,8 @@ describe("GET /books", () => {
         it("[LIST-02] page 2 holds the last 4 titles", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { page: 2 } });
+            const res = await staff.get("/books").query({ page: 2 }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(titlesOf(res.body.data.items)).toEqual([
                 "The Hobbit",
                 "The House on Mango Street",
@@ -42,7 +40,7 @@ describe("GET /books", () => {
         it("[LIST-23] page=0 is rejected", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { page: 0 } });
+            const res = await staff.get("/books").query({ page: 0 });
 
             expectValidationError(res, "page");
         });
@@ -52,9 +50,8 @@ describe("GET /books", () => {
         it("[LIST-03] finds a title by author and maps every item field (student)", async () => {
             const student = await signInAs("student");
 
-            const res = await student.get("/books", { query: { q: "hawking" } });
+            const res = await student.get("/books").query({ q: "hawking" }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body).toMatchObject({
                 success: true,
                 data: {
@@ -88,9 +85,8 @@ describe("GET /books", () => {
         it("[LIST-04] is case-insensitive on the title", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { q: "MIDNIGHT" } });
+            const res = await staff.get("/books").query({ q: "MIDNIGHT" }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(titlesOf(res.body.data.items)).toEqual(["The Midnight Library"]);
             expect(res.body.data.pagination.totalItems).toBe(1);
         });
@@ -98,27 +94,24 @@ describe("GET /books", () => {
         it("[LIST-05] finds a title by ISBN", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { q: ISBN.hobbit } });
+            const res = await staff.get("/books").query({ q: ISBN.hobbit }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.data.items).toMatchObject([{ _id: BOOK_ID.hobbit, title: "The Hobbit" }]);
         });
 
         it("[LIST-06] finds a title by keyword", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { q: "dystopian" } });
+            const res = await staff.get("/books").query({ q: "dystopian" }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(titlesOf(res.body.data.items)).toEqual(["The Giver"]);
         });
 
         it("[LIST-07] relevance order puts the title-prefix match first", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { q: "wo" } });
+            const res = await staff.get("/books").query({ q: "wo" }).expect(200);
 
-            expect(res.status).toBe(200);
             // Wonder matches by title prefix; The Book Thief only by its keywords
             // "World War II" / "Words & courage".
             expect(titlesOf(res.body.data.items)).toEqual(["Wonder", "The Book Thief"]);
@@ -127,18 +120,16 @@ describe("GET /books", () => {
         it("[LIST-08] the same search sorted by title", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { q: "wo", sortBy: "title" } });
+            const res = await staff.get("/books").query({ q: "wo", sortBy: "title" }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(titlesOf(res.body.data.items)).toEqual(["The Book Thief", "Wonder"]);
         });
 
         it("[LIST-09] no match gives an empty page with 0 total pages", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { q: "no such book" } });
+            const res = await staff.get("/books").query({ q: "no such book" }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body).toEqual({
                 success: true,
                 data: { items: [], pagination: { totalItems: 0, currentPage: 1, totalPages: 0, limit: 6 } }
@@ -150,9 +141,8 @@ describe("GET /books", () => {
         it("[LIST-10] filters by one category", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { category: "Fiction" } });
+            const res = await staff.get("/books").query({ category: "Fiction" }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(titlesOf(res.body.data.items)).toEqual([
                 "A Wrinkle in Time",
                 "The Book Thief",
@@ -168,9 +158,8 @@ describe("GET /books", () => {
         it("[LIST-11] filters by a comma-separated category list", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { category: "Poetry,Reference" } });
+            const res = await staff.get("/books").query({ category: "Poetry,Reference" }).expect(200);
 
-            expect(res.status).toBe(200);
             // The order of these two titles depends on the database collation.
             expect(res.body.data.items).toHaveLength(2);
             expect(res.body.data.items).toEqual(
@@ -185,7 +174,7 @@ describe("GET /books", () => {
         it("[LIST-12] an unknown category is a validation error, not an empty list", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { category: "Fiction,Fantasy" } });
+            const res = await staff.get("/books").query({ category: "Fiction,Fantasy" });
 
             expectValidationError(res, "category");
         });
@@ -193,18 +182,16 @@ describe("GET /books", () => {
         it("[LIST-13] filters by genre (a value with a space)", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { genre: "Science fiction" } });
+            const res = await staff.get("/books").query({ genre: "Science fiction" }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(titlesOf(res.body.data.items)).toEqual(["A Wrinkle in Time", "The Giver"]);
         });
 
         it("[LIST-14] filters by language", async () => {
             const student = await signInAs("student");
 
-            const res = await student.get("/books", { query: { language: "Vietnamese" } });
+            const res = await student.get("/books").query({ language: "Vietnamese" }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.data.items).toMatchObject([
                 { _id: BOOK_ID.deMen, title: "Dế Mèn Phiêu Lưu Ký", language: "Vietnamese" }
             ]);
@@ -213,9 +200,8 @@ describe("GET /books", () => {
         it("[LIST-15] availableNow=true keeps only titles with an Available copy", async () => {
             const student = await signInAs("student");
 
-            const res = await student.get("/books", { query: { availableNow: "true", limit: 10 } });
+            const res = await student.get("/books").query({ availableNow: "true", limit: 10 }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.data.items).toHaveLength(8);
             for (const book of res.body.data.items) {
                 expect(book.stockSummary.isAvailableNow).toBe(true);
@@ -226,16 +212,15 @@ describe("GET /books", () => {
         it("[LIST-16] availableNow=false is not a filter", async () => {
             const student = await signInAs("student");
 
-            const res = await student.get("/books", { query: { availableNow: "false" } });
+            const res = await student.get("/books").query({ availableNow: "false" }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.data.pagination.totalItems).toBe(10);
         });
 
         it("[LIST-17] availableNow must be a boolean string", async () => {
             const student = await signInAs("student");
 
-            const res = await student.get("/books", { query: { availableNow: "maybe" } });
+            const res = await student.get("/books").query({ availableNow: "maybe" });
 
             expectValidationError(res, "availableNow");
         });
@@ -243,9 +228,8 @@ describe("GET /books", () => {
         it("[LIST-18] stock=unavailable lists titles with no Available copy", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { stock: "unavailable" } });
+            const res = await staff.get("/books").query({ stock: "unavailable" }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.data.items).toMatchObject([
                 { title: "The Giver", stockSummary: { availableCopies: 0, isAvailableNow: false } },
                 { title: "The Hobbit", stockSummary: { availableCopies: 0, isAvailableNow: false } }
@@ -256,16 +240,15 @@ describe("GET /books", () => {
         it("[LIST-19] stock=available", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { stock: "available" } });
+            const res = await staff.get("/books").query({ stock: "available" }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.data.pagination).toMatchObject({ totalItems: 8, totalPages: 2 });
         });
 
         it("[LIST-20] an unknown stock value is rejected", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { stock: "bogus" } });
+            const res = await staff.get("/books").query({ stock: "bogus" });
 
             expectValidationError(res, "stock");
         });
@@ -273,9 +256,8 @@ describe("GET /books", () => {
         it("[LIST-22] filters combine with AND", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { category: "Fiction", stock: "unavailable" } });
+            const res = await staff.get("/books").query({ category: "Fiction", stock: "unavailable" }).expect(200);
 
-            expect(res.status).toBe(200);
             expect(titlesOf(res.body.data.items)).toEqual(["The Giver", "The Hobbit"]);
         });
     });
@@ -284,9 +266,8 @@ describe("GET /books", () => {
         it("[LIST-21] sortBy=publishedYear is newest first", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get("/books", { query: { sortBy: "publishedYear", limit: 10 } });
+            const res = await staff.get("/books").query({ sortBy: "publishedYear", limit: 10 }).expect(200);
 
-            expect(res.status).toBe(200);
             // Published years: 2020, 2017, 2012, 2005, 1993, 1988, 1984, 1962, 1941, 1937.
             expect(titlesOf(res.body.data.items)).toEqual([
                 "The Midnight Library",
@@ -305,9 +286,8 @@ describe("GET /books", () => {
 
     describe("access", () => {
         it("[LIST-24] a guest gets 401 UNAUTHORIZED", async () => {
-            const res = await guest().get("/books");
+            const res = await guest().get("/books").expect(401);
 
-            expect(res.status).toBe(401);
             expect(res.body.error.code).toBe("UNAUTHORIZED");
         });
 

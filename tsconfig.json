@@ -45,6 +45,8 @@
       "*": ["./*"]
     }
   },
+  // Only src/ is compiled. Root files such as vitest.config.ts sit outside rootDir and would break `tsc`.
+  "include": ["src"],
   // .test holds the API tests; they have their own .test/tsconfig.json and are not built.
   "exclude": ["node_modules", "dist", ".test"],
 }

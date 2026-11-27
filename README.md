@@ -35,10 +35,13 @@ written in TypeScript with Express 5 and PostgreSQL.
   to administrators.
 - Book catalog and physical-copy management (list, detail, featured, create,
   update, delete, add/update/delete copies), restricted by role.
+- Student holds (place, cancel) and the staff list of holds.
+- Loans: the student "My borrowing" dashboard and online renewal, and the staff
+  counter (find student, check copy, issue books, find and return a loan, loan records).
 - Zod request validation and a uniform JSON response envelope.
 - A development-only endpoint that resets the database to the demo data.
 
-The holds and loans modules are skeletons and are not mounted yet.
+Every endpoint is described in [doc/API_Contract.md](doc/API_Contract.md).
 
 ## Technology stack
 
@@ -64,29 +67,36 @@ The holds and loans modules are skeletons and are not mounted yet.
 ├── docker-compose.yml     Main DB (port 5432, persistent) + test DB (port 5433, in-memory)
 ├── .env.example           List of the environment variables
 ├── package.json           npm scripts
+├── tsconfig.json          Compiles only src/ into dist/
 ├── vitest.config.ts       Config for the unit/repository tests in src/
-├── .test/                 API tests: real HTTP calls to a running server
+├── doc/
+│   └── API_Contract.md    Endpoint contract: request, response, business rules, error codes
+├── .test/                 API tests: real HTTP calls (supertest) to a running server
 │   ├── vitest.config.ts
-│   ├── helpers/           HTTP client, login/session, reset-db helpers
-│   └── book-inventories/  *.api.test.ts, one file per endpoint (+ README)
-└── src/                   Application source (see below)
+│   ├── tsconfig.json
+│   ├── helpers/           supertest agent, login/session, reset-db setup, assertions, date and borrowing helpers
+│   ├── book-inventories/  One *.api.test.ts per endpoint, fixtures.ts, README (setup, run options, helpers)
+│   ├── holds/             One *.api.test.ts per endpoint, README (cases, test data, contract gaps)
+│   └── loans/             One *.api.test.ts per endpoint, README (cases, test data, contract gaps)
+├── src/                   Application source (see below)
+└── dist/                  Build output of `npm run build` (generated, not committed)
 ```
 
 ### Inside `src/`
 
 ```text
 src/
-├── server.ts              ★ Entry point: builds the Express app, mounts routes, starts the server
+├── server.ts              Entry point: builds the Express app, mounts routes, starts the server
 ├── app.ts                 Not used (fully commented out)
 ├── setup.test.ts          Loads .env.test.local for Vitest
 │
 ├── modules/               One folder per feature
-│   ├── auth/              Login, current user, logout            ✅ mounted
-│   ├── admin/             User account administration            ✅ mounted
-│   ├── book-inventories/  Books and physical copies              ✅ mounted
-│   ├── dev-tools/         POST /dev/reset-db                     ⚙️ only when ENABLE_DB_RESET=true
-│   ├── holds/             Reservations                           🚧 skeleton
-│   └── loans/             Checkout, return, renew                🚧 skeleton
+│   ├── auth/              Login, current user, logout
+│   ├── admin/             User account administration
+│   ├── book-inventories/  Books and physical copies
+│   ├── holds/             Place and cancel holds, staff list of holds
+│   ├── loans/             My borrowing, renew, checkout, return, records
+│   └── dev-tools/         POST /dev/reset-db, X-Session-Cookie header (only when ENABLE_DB_RESET=true)
 │
 └── shared/
     ├── database/
@@ -96,25 +106,42 @@ src/
     │   ├── reset-data.sql Empties every app table
     │   ├── drop-all.sql   Drops every app table and the view
     │   └── init.seed.ts   At startup: creates admin ADM001 if `users` is empty
-    ├── middlewares/       Session setup, "is logged in" check
-    └── utils/             Error and password helpers
+    ├── middlewares/
+    │   ├── session.middleware.ts       express-session with the PostgreSQL session store
+    │   └── verification.middleware.ts  "Is logged in" check, used in front of every router
+    └── utils/
+        ├── errors.util.ts              AppError class (used by verification.middleware.ts)
+        └── password.util.ts            Password helpers (plain text for now)
 ```
 
 ### Inside one module
 
-Every module in `src/modules/<name>/` has the same layers:
+The feature modules (`auth`, `admin`, `book-inventories`, `holds`, `loans`)
+share the same layers:
 
 ```text
 src/modules/<name>/
-├── <name>.routes.ts            URL + role guard → controller function
-├── <name>.controller.ts        Validates input with Zod, maps errors to HTTP status, sends JSON
+├── <name>.routes.ts            URL → role guard → controller function
+├── <name>.controller.ts        Role guards (requireStaff, ...), Zod validation, error code → HTTP status, JSON
 ├── <name>.service.ts           Business rules; throws errors with a `code`
-├── <name>.dto.ts / .entity.ts  Plain types and classes
+├── <name>.entity.ts            Types the repository returns to the service
+├── <name>.dto.ts               Request/response types (auth, admin, book-inventories only)
 └── repositories/
     ├── <name>.repository.interface.ts
-    ├── <name>.repository.ts    Raw parameterized SQL with pg
-    └── <name>.repository.test.ts   Repository tests (run against the test DB)
+    ├── <name>.repository.ts            Raw parameterized SQL with pg
+    ├── <name>.repository.test.ts       Repository tests (run against the test DB)
+    └── <name>.repository.seed.test.ts  Seed data for those tests, no test cases (auth, admin only)
 ```
+
+Exceptions to the names above:
+
+- `holds` spells two files `respository`: `holds.respository.ts` and
+  `holds.respository.test.ts`. `book-inventories` does the same for its test file,
+  `book-inventories.respository.test.ts`.
+- `loans` has one repository file holding four classes: `LoansRepositoryImpl`,
+  `BorrowersRepositoryImpl`, `LoanCopiesRepositoryImpl`, `LoanHoldsRepositoryImpl`.
+- `dev-tools` has no layers: only `dev-tools.routes.ts` and
+  `dev-session-header.middleware.ts`.
 
 A request travels like this:
 
@@ -348,8 +375,8 @@ rows in pgAdmin.
 
 ### API tests (`.test/**/*.api.test.ts`)
 
-These send real HTTP requests to a running server, so **start the server in
-test mode first** and keep it running:
+These send real HTTP requests with supertest to a running server, so **start
+the server in test mode first** and keep it running:
 
 ```bash
 # terminal 1: server on the test DB (ENABLE_DB_RESET=true in .env.test.local)
@@ -358,6 +385,8 @@ npm run dev:test
 # terminal 2, from the repository root
 npm run test:api          # every module under .test/
 npm run test:api:books    # only book-inventories
+npm run test:api:holds    # only holds
+npm run test:api:loans    # only loans
 ```
 
 To run one test or a group of tests, work from inside `.test`: either
@@ -365,8 +394,13 @@ To run one test or a group of tests, work from inside `.test`: either
 workspace so the Vitest extension shows the API tests.
 
 Every API test calls `POST /api/v1/dev/reset-db`, which empties the tables and
-reloads `init.sql`. See [.test/book-inventories/README.md](.test/book-inventories/README.md)
-for details.
+reloads `init.sql`. Each module folder has its own README:
+
+| README | What it covers |
+|---|---|
+| [.test/book-inventories/README.md](.test/book-inventories/README.md) | Full setup and run options, the shared helpers, how a supertest test is written, the book-inventories cases and known bugs |
+| [.test/holds/README.md](.test/holds/README.md) | The hold cases (contract 6.2, 6.3, 7.7), their test data, and what the contract leaves open |
+| [.test/loans/README.md](.test/loans/README.md) | The loan cases (contract 6.1, 6.4, 7.1–7.6), their test data, and what the contract leaves open |
 
 ### Browsing the data with pgAdmin
 
@@ -506,8 +540,5 @@ module returns `INVALID_INPUT` instead.
 
 ## Known limitations
 
-- `holds` and `loans` are skeletons and are not mounted. `holds.routes.ts`
-  imports `@shared/middlewares/require-role.middleware.js`, which does not exist
-  yet, so `npm run build` fails until it is added. `npm run dev` is not affected.
 - Passwords are stored and compared as plain text (local development only).
 - Repository tests are exploratory and mostly log results instead of asserting.

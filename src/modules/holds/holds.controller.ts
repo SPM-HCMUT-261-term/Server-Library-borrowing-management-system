@@ -1,12 +1,12 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import z from "zod";
 
 
 
 // TODO: wire these up once HoldsRepositoryImpl exists (same pattern as admin.controller.ts)
-// import { pool } from "@shared/database/db.js";
-// import { HoldsRepositoryImpl } from "./repositories/holds.repository.js";
-// import { HoldsService } from "./holds.service.js";
+import { pool } from "@shared/database/db.js";
+import { HoldsRepositoryImpl } from "./repositories/holds.respository.js";
+import { HoldsService } from "./holds.service.js";
 
 // zod schemas for input request validation
 const idSchema = z.string().trim().min(1, "id is required"); // hold _id or holdCode
@@ -69,8 +69,50 @@ function sendValidationError(res: Response, error: z.ZodError): void {
   });
 }
 
-// const holdsService = new HoldsService(new HoldsRepositoryImpl(pool));
+const holdsService = new HoldsService(new HoldsRepositoryImpl(pool));
 
+
+export async function requireStudent(req: Request, res: Response, next: NextFunction): Promise<void> {
+    if (req.session?.role === "student") {
+        next();
+    } else {
+        res.status(403).json({
+            success: false,
+            error: {
+                code: "FORBIDDEN_ACCESS",
+                message: "Access denied. Only students are allowed to access this resource."
+            }
+        });
+    }
+}
+
+export async function requireStaff(req: Request, res: Response, next: NextFunction): Promise<void> {
+    if (req.session?.role === "staff") {
+        next();
+    } else {
+        res.status(403).json({
+            success: false,
+            error: {
+                code: "FORBIDDEN_ACCESS",
+                message: "Access denied. Only staffs are allowed to access this resource."
+            }
+        });
+    }
+}
+
+export async function requireStudentOrStaff(req: Request, res: Response, next: NextFunction): Promise<void> {
+    if (req.session?.role === "student" || req.session?.role === "staff") {
+        next();
+    } else {
+        res.status(403).json({
+            success: false,
+            error: {
+                code: "FORBIDDEN_ACCESS",
+                message: "Access denied. Only students and staffs are allowed to access this resource."
+            }
+        });
+    }
+}
 
 // controller handlers for holds routes (role checks live in holds.routes.ts)
 
@@ -82,9 +124,21 @@ export async function createHold(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  const studentId = req.session?._id;
+  if (!studentId) {
+    res.status(401).json({
+      success: false,
+      error: { code: "UNAUTHORIZED", message: "Authentication is required" }
+    });
+    return;
+  }
+
   try {
-    // TODO: const data = await holdsService.createHold({ studentId, bookId: body.data.bookId }); // studentId from req.session._id
-    // TODO: res.status(201).json({ success: true, data });
+    const data = await holdsService.createHold({
+      studentId,
+      bookId: body.data.bookId
+    });
+    res.status(201).json({ success: true, data });
   } catch (error) {
     sendServiceError(res, error);
   }
@@ -98,15 +152,27 @@ export async function cancelHold(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const requesterRole = req.session?.role as "student" | "staff";
+  const requesterId = req.session?._id;
+  const requesterRole = req.session?.role;
+  if (!requesterId || (requesterRole !== "student" && requesterRole !== "staff")) {
+    res.status(401).json({
+      success: false,
+      error: { code: "UNAUTHORIZED", message: "Authentication is required" }
+    });
+    return;
+  }
 
   try {
-    // TODO: const data = await holdsService.cancelHold({ id: params.data.id, requesterId, requesterRole });
-    // TODO: res.status(200).json({
-    //   success: true,
-    //   message: `Hold ${data.holdCode} has been cancelled and the copy is now available.`,
-    //   data
-    // });
+    const data = await holdsService.cancelHold({
+      id: params.data.id,
+      requesterId,
+      requesterRole
+    });
+    res.status(200).json({
+      success: true,
+      message: `Hold ${data.holdCode} has been cancelled and the copy is now available.`,
+      data
+    });
   } catch (error) {
     sendServiceError(res, error);
   }
@@ -121,8 +187,12 @@ export async function getActiveHolds(req: Request, res: Response): Promise<void>
   }
 
   try {
-    // TODO: const data = await holdsService.getActiveHolds({ q: query.data.q, page: query.data.page, limit: query.data.limit });
-    // TODO: res.status(200).json({ success: true, data });
+    const data = await holdsService.getActiveHolds({
+      q: query.data.q,
+      page: query.data.page,
+      limit: query.data.limit
+    });
+    res.status(200).json({ success: true, data });
   } catch (error) {
     sendServiceError(res, error);
   }

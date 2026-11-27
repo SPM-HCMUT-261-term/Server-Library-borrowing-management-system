@@ -1,5 +1,14 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import z from "zod";
+
+import { pool } from "@shared/database/db.js";
+import {
+  LoansRepositoryImpl,
+  BorrowersRepositoryImpl,
+  LoanCopiesRepositoryImpl,
+  LoanHoldsRepositoryImpl
+} from "./repositories/loans.repository.js";
+import { LoansService } from "./loans.service.js";
 
 const idParamsSchema = z.object({
   id: z.string().trim().min(1, "Loan id is required") // loan _id or borrowCode
@@ -53,7 +62,7 @@ const getLoanRecordsQuerySchema = z.object({
   sortBy: z.enum(["dueDate", "borrowedAt", "returnedAt"]).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
   page: z.coerce.number().int().positive().optional(),
-  limit: z.coerce.number().int().positive().optional()
+  limit: z.coerce.number().int().positive().max(100).optional()
 });
 
 const renewLoanParamsSchema = idParamsSchema;
@@ -112,26 +121,198 @@ function handleValidationError(res: Response, error: z.ZodError): void {
   });
 }
 
+const loansService = new LoansService(
+  new LoansRepositoryImpl(pool),
+  new BorrowersRepositoryImpl(pool),
+  new LoanCopiesRepositoryImpl(pool),
+  new LoanHoldsRepositoryImpl(pool)
+);
+
+
+export async function requireStudent(req: Request, res: Response, next: NextFunction): Promise<void> {
+    if (req.session?.role === "student") {
+        next();
+    } else {
+        res.status(403).json({
+            success: false,
+            error: {
+                code: "FORBIDDEN_ACCESS",
+                message: "Access denied. Only students are allowed to access this resource."
+            }
+        });
+    }
+}
+
+export async function requireStaff(req: Request, res: Response, next: NextFunction): Promise<void> {
+    if (req.session?.role === "staff") {
+        next();
+    } else {
+        res.status(403).json({
+            success: false,
+            error: {
+                code: "FORBIDDEN_ACCESS",
+                message: "Access denied. Only staffs are allowed to access this resource."
+            }
+        });
+    }
+}
+
+
 // GET /staff/students/:accountId (staff)
-export function findStudentForCheckout(_req: Request, _res: Response): void {}
+export async function findStudentForCheckout(req: Request, res: Response): Promise<void> {
+  const parsed = findStudentForCheckoutParamsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    handleValidationError(res, parsed.error);
+    return;
+  }
+  try {
+    const data = await loansService.findStudentForCheckout(parsed.data.accountId);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    handleLoanError(res, error);
+  }
+}
 
 // GET /staff/copies/:copyCode/checkout-check?studentAccountId=... (staff)
-export function checkCopyForCheckout(_req: Request, _res: Response): void {}
+export async function checkCopyForCheckout(req: Request, res: Response): Promise<void> {
+  const parsed = checkCopyForCheckoutRequestSchema.safeParse({
+    params: req.params,
+    query: req.query
+  });
+  if (!parsed.success) {
+    handleValidationError(res, parsed.error);
+    return;
+  }
+  try {
+    const data = await loansService.checkCopyForCheckout({
+      copyCode: parsed.data.params.copyCode,
+      studentAccountId: parsed.data.query.studentAccountId
+    });
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    handleLoanError(res, error);
+  }
+}
 
 // POST /staff/loans/issue (staff)
-export function issueBooks(_req: Request, _res: Response): void {}
+export async function issueBooks(req: Request, res: Response): Promise<void> {
+  const parsed = issueBooksBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    handleValidationError(res, parsed.error);
+    return;
+  }
+  try {
+    const result = await loansService.issueBooks(parsed.data);
+    res.status(201).json({
+      success: true,
+      message: result.message,
+      data: result.data
+    });
+  } catch (error) {
+    handleLoanError(res, error);
+  }
+}
 
 // GET /staff/loans/active-by-copy/:copyCode (staff)
-export function findActiveLoanByCopy(_req: Request, _res: Response): void {}
+export async function findActiveLoanByCopy(req: Request, res: Response): Promise<void> {
+  const parsed = findActiveLoanByCopyParamsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    handleValidationError(res, parsed.error);
+    return;
+  }
+  try {
+    const data = await loansService.findActiveLoanByCopy(parsed.data.copyCode);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    handleLoanError(res, error);
+  }
+}
 
 // POST /staff/loans/:id/return (staff)
-export function returnBook(_req: Request, _res: Response): void {}
+export async function returnBook(req: Request, res: Response): Promise<void> {
+  const parsed = returnBookRequestSchema.safeParse({
+    params: req.params,
+    body: req.body
+  });
+  if (!parsed.success) {
+    handleValidationError(res, parsed.error);
+    return;
+  }
+  try {
+    const result = await loansService.returnBook({
+      id: parsed.data.params.id,
+      condition: parsed.data.body.condition,
+      conditionNote: parsed.data.body.conditionNote
+    });
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result.data
+    });
+  } catch (error) {
+    handleLoanError(res, error);
+  }
+}
 
 // GET /staff/loans (staff)
-export function getLoanRecords(_req: Request, _res: Response): void {}
+export async function getLoanRecords(req: Request, res: Response): Promise<void> {
+  const parsed = getLoanRecordsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    handleValidationError(res, parsed.error);
+    return;
+  }
+  try {
+    const data = await loansService.getLoanRecords(parsed.data);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    handleLoanError(res, error);
+  }
+}
 
 // GET /me/borrowing (student)
-export function getMyBorrowing(_req: Request, _res: Response): void {}
+export async function getMyBorrowing(req: Request, res: Response): Promise<void> {
+  const studentId = req.session?._id;
+  if (!studentId) {
+    res.status(401).json({
+      success: false,
+      error: { code: "UNAUTHORIZED", message: "Authentication is required" }
+    });
+    return;
+  }
+  try {
+    const data = await loansService.getMyBorrowing(studentId);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    handleLoanError(res, error);
+  }
+}
 
 // POST /loans/:id/renew (student)
-export function renewLoan(_req: Request, _res: Response): void {}
+export async function renewLoan(req: Request, res: Response): Promise<void> {
+  const parsed = renewLoanParamsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    handleValidationError(res, parsed.error);
+    return;
+  }
+  const studentId = req.session?._id;
+  if (!studentId) {
+    res.status(401).json({
+      success: false,
+      error: { code: "UNAUTHORIZED", message: "Authentication is required" }
+    });
+    return;
+  }
+  try {
+    const result = await loansService.renewLoan({
+      id: parsed.data.id,
+      studentId
+    });
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result.data
+    });
+  } catch (error) {
+    handleLoanError(res, error);
+  }
+}
