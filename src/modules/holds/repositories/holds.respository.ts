@@ -312,9 +312,8 @@ export class HoldsRepositoryImpl implements HoldsRepository {
                 [params.bookId],
             );
             if (!bookResult.rows[0]) {
-                throw Object.assign(new Error("Book not found"), {
-                    code: "BOOK_NOT_FOUND",
-                });
+                await client.query("COMMIT");
+                return "no_available_copies";
             }
 
             const studentResult = await client.query<
