@@ -14,9 +14,8 @@ describe("GET /books/:id", () => {
         it("[DETAIL-01] returns stock, the delete guard and per-copy loan details", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get(`/books/${BOOK_ID.midnightLibrary}`);
+            const res = await staff.get(`/books/${BOOK_ID.midnightLibrary}`).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.data).toMatchObject({
                 _id: BOOK_ID.midnightLibrary,
@@ -82,9 +81,8 @@ describe("GET /books/:id", () => {
         it("[DETAIL-02] accepts an ISBN as the id", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.get(`/books/${ISBN.midnightLibrary}`);
+            const res = await staff.get(`/books/${ISBN.midnightLibrary}`).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body).toMatchObject({
                 success: true,
                 data: { _id: BOOK_ID.midnightLibrary, title: "The Midnight Library" }
@@ -106,9 +104,8 @@ describe("GET /books/:id", () => {
             // Maya (S10428) borrows Wonder through BR-2098.
             const maya = await signInAs("student", ACCOUNT.maya);
 
-            const res = await maya.get(`/books/${BOOK_ID.wonder}`);
+            const res = await maya.get(`/books/${BOOK_ID.wonder}`).expect(200);
 
-            expect(res.status).toBe(200);
             const book = res.body.data;
             expect(book.title).toBe("Wonder");
             expect(book).not.toHaveProperty("canDeleteTitle");
@@ -133,9 +130,8 @@ describe("GET /books/:id", () => {
         it("[DETAIL-04] no copy available: a hold can be requested", async () => {
             const maya = await signInAs("student", ACCOUNT.maya);
 
-            const res = await maya.get(`/books/${BOOK_ID.hobbit}`);
+            const res = await maya.get(`/books/${BOOK_ID.hobbit}`).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.data).toMatchObject({ title: "The Hobbit", stockSummary: { availableCopies: 0 } });
             expect(res.body.data.viewerContext).toEqual({
                 canBorrow: false,
@@ -152,9 +148,8 @@ describe("GET /books/:id", () => {
             // The viewer context does not check overdue loans.
             const oliver = await signInAs("student", ACCOUNT.oliver);
 
-            const res = await oliver.get(`/books/${BOOK_ID.midnightLibrary}`);
+            const res = await oliver.get(`/books/${BOOK_ID.midnightLibrary}`).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.data.viewerContext).toEqual({
                 canBorrow: true,
                 canRequestHold: false,
@@ -168,9 +163,8 @@ describe("GET /books/:id", () => {
         it("[DETAIL-06] already borrowing, for a different student", async () => {
             const oliver = await signInAs("student", ACCOUNT.oliver);
 
-            const res = await oliver.get(`/books/${BOOK_ID.hobbit}`);
+            const res = await oliver.get(`/books/${BOOK_ID.hobbit}`).expect(200);
 
-            expect(res.status).toBe(200);
             expect(res.body.data.viewerContext).toMatchObject({
                 canBorrow: false,
                 canRequestHold: false,

@@ -1,32 +1,33 @@
-// import { Router } from "express";
+import { Router } from "express";
 
-// import { requireStaff, requireStudent } from "@shared/middlewares/require-role.middleware.js";
-// import {
-//   findStudentForCheckout,
-//   checkCopyForCheckout,
-//   issueBooks,
-//   findActiveLoanByCopy,
-//   returnBook,
-//   getLoanRecords,
-//   getMyBorrowing,
-//   renewLoan
-// } from "./loans.controller.js";
+import {
+  requireStaff,
+  requireStudent,
+  findStudentForCheckout,
+  checkCopyForCheckout,
+  issueBooks,
+  findActiveLoanByCopy,
+  returnBook,
+  getLoanRecords,
+  getMyBorrowing,
+  renewLoan
+} from "./loans.controller.js";
 
-// // mount at /staff
-// const staffLoansRouter = Router();
-// staffLoansRouter.get("/students/:accountId", requireStaff, findStudentForCheckout);
-// staffLoansRouter.get("/copies/:copyCode/checkout-check", requireStaff, checkCopyForCheckout);
-// staffLoansRouter.post("/loans/issue", requireStaff, issueBooks);
-// staffLoansRouter.get("/loans/active-by-copy/:copyCode", requireStaff, findActiveLoanByCopy);
-// staffLoansRouter.post("/loans/:id/return", requireStaff, returnBook);
-// staffLoansRouter.get("/loans", requireStaff, getLoanRecords);
+// mount at /api/v1/staff
+const staffLoansRouter = Router();
+staffLoansRouter.get("/students/:accountId", requireStaff, findStudentForCheckout); // 7.1
+staffLoansRouter.get("/copies/:copyCode/checkout-check", requireStaff, checkCopyForCheckout); // 7.2
+staffLoansRouter.post("/loans/issue", requireStaff, issueBooks); // 7.3
+staffLoansRouter.get("/loans/active-by-copy/:copyCode", requireStaff, findActiveLoanByCopy); // 7.4
+staffLoansRouter.post("/loans/:id/return", requireStaff, returnBook); // 7.5
+staffLoansRouter.get("/loans", requireStaff, getLoanRecords); // 7.6
 
-// // mount at /loans
-// const studentLoansRouter = Router();
-// studentLoansRouter.post("/:id/renew", requireStudent, renewLoan);
+// mount at /api/v1/loans
+const studentLoansRouter = Router();
+studentLoansRouter.post("/:id/renew", requireStudent, renewLoan); // 6.4
 
-// // mount at /me
-// const meRouter = Router();
-// meRouter.get("/borrowing", requireStudent, getMyBorrowing);
+// mount at /api/v1/me
+const meRouter = Router();
+meRouter.get("/borrowing", requireStudent, getMyBorrowing); // 6.1
 
-// export { staffLoansRouter, studentLoansRouter, meRouter };
+export { staffLoansRouter, studentLoansRouter, meRouter };

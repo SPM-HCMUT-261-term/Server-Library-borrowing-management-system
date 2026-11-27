@@ -22,12 +22,11 @@ describe("PUT /books/:id", () => {
         // Checks the undefined-vs-null fix: a missing field must not be cleared.
         const staff = await signInAs("staff");
 
-        const res = await staff.put(`/books/${BOOK_ID.midnightLibrary}`, {
-            ...MIDNIGHT_REQUIRED,
-            title: "The Midnight Library (2nd ed.)"
-        });
+        const res = await staff
+            .put(`/books/${BOOK_ID.midnightLibrary}`)
+            .send({ ...MIDNIGHT_REQUIRED, title: "The Midnight Library (2nd ed.)" })
+            .expect(200);
 
-        expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
         expect(res.body.data).toMatchObject({
             _id: BOOK_ID.midnightLibrary,
@@ -46,32 +45,29 @@ describe("PUT /books/:id", () => {
     it("[UPDATE-02] null clears a nullable field", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.put(`/books/${BOOK_ID.midnightLibrary}`, {
-            ...MIDNIGHT_REQUIRED,
-            publisher: null,
-            genre: null
-        });
+        const res = await staff
+            .put(`/books/${BOOK_ID.midnightLibrary}`)
+            .send({ ...MIDNIGHT_REQUIRED, publisher: null, genre: null })
+            .expect(200);
 
-        expect(res.status).toBe(200);
         expect(res.body.data).toMatchObject({ publisher: null, genre: null, pageCount: 304 });
     });
 
     it("[UPDATE-03] accepts a new unique ISBN", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.put(`/books/${BOOK_ID.midnightLibrary}`, {
-            ...MIDNIGHT_REQUIRED,
-            isbn: "9780525559474"
-        });
+        const res = await staff
+            .put(`/books/${BOOK_ID.midnightLibrary}`)
+            .send({ ...MIDNIGHT_REQUIRED, isbn: "9780525559474" })
+            .expect(200);
 
-        expect(res.status).toBe(200);
         expect(res.body.data).toMatchObject({ _id: BOOK_ID.midnightLibrary, isbn: "9780525559474" });
     });
 
     it("[UPDATE-04] the ISBN of another book is a conflict", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.put(`/books/${BOOK_ID.bookThief}`, {
+        const res = await staff.put(`/books/${BOOK_ID.bookThief}`).send({
             title: "The Book Thief",
             author: "Markus Zusak",
             isbn: ISBN.midnightLibrary,
@@ -84,7 +80,7 @@ describe("PUT /books/:id", () => {
     it("[UPDATE-05] returns 404 for an unknown id", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.put(`/books/${UNKNOWN_ID}`, {
+        const res = await staff.put(`/books/${UNKNOWN_ID}`).send({
             title: "Ghost",
             author: "Nobody",
             isbn: "9780000000099",
@@ -98,7 +94,7 @@ describe("PUT /books/:id", () => {
         it("[UPDATE-06] a blank author is rejected", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.put(`/books/${BOOK_ID.midnightLibrary}`, { ...MIDNIGHT_REQUIRED, author: "" });
+            const res = await staff.put(`/books/${BOOK_ID.midnightLibrary}`).send({ ...MIDNIGHT_REQUIRED, author: "" });
 
             expectValidationError(res, "author");
             expect(res.body.error.details["author"]).toBe("Author is required");
@@ -107,7 +103,7 @@ describe("PUT /books/:id", () => {
         it("[UPDATE-07] pageCount as a string is rejected", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.put(`/books/${BOOK_ID.midnightLibrary}`, { ...MIDNIGHT_REQUIRED, pageCount: "300" });
+            const res = await staff.put(`/books/${BOOK_ID.midnightLibrary}`).send({ ...MIDNIGHT_REQUIRED, pageCount: "300" });
 
             expectValidationError(res, "pageCount");
         });
@@ -117,7 +113,7 @@ describe("PUT /books/:id", () => {
         it("[UPDATE-08] a student is not allowed", async () => {
             const student = await signInAs("student");
 
-            const res = await student.put(`/books/${BOOK_ID.midnightLibrary}`, { ...MIDNIGHT_REQUIRED, title: "Hacked" });
+            const res = await student.put(`/books/${BOOK_ID.midnightLibrary}`).send({ ...MIDNIGHT_REQUIRED, title: "Hacked" });
 
             expectApiError(res, 403, "FORBIDDEN_ACCESS");
         });

@@ -1,15 +1,21 @@
 import { Router } from "express";
 
-import { requireStaff, requireStudent, requireStaffOrStudent } from "@shared/middlewares/require-role.middleware.js";
-import { createHold, cancelHold, getActiveHolds } from "./holds.controller.js";
+import {
+  requireStudent,
+  requireStaff,
+  requireStudentOrStaff,
+  createHold,
+  cancelHold,
+  getActiveHolds
+} from "./holds.controller.js";
 
-// mount at /holds
+// mount at /api/v1/holds
 const holdsRouter = Router();
-holdsRouter.post("", requireStudent, createHold);
-holdsRouter.delete("/:id", requireStaffOrStudent, cancelHold);
+holdsRouter.post("", requireStudent, createHold); // 6.2 createHold
+holdsRouter.delete("/:id", requireStudentOrStaff, cancelHold); // 6.3 cancelHold
 
-// mount at /staff/holds
+// mount at /api/v1/staff/holds
 const staffHoldsRouter = Router();
-staffHoldsRouter.get("", requireStaff, getActiveHolds);
+staffHoldsRouter.get("", requireStaff, getActiveHolds); // 7.7 getActiveHolds
 
 export { holdsRouter, staffHoldsRouter };

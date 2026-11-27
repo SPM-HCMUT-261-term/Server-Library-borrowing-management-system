@@ -170,6 +170,8 @@ WHERE id = $1::int RETURNING active_loans_count AS "loansNow";
     }): Promise<ReturnLoanResultEntity | null>;
     // ONE transaction. Return Entity if success, else null (loan not Active any more).
     // NOTE: the `loans` table has no column for conditionNote. Add one (e.g. loans.return_note TEXT) or write it to physical_copies.notes.
+    // DONE: written to physical_copies.notes. conditionNote undefined = notes is not in the UPDATE (the copy keeps its note).
+    // The result's conditionNote is the note sent with this return, or null when none was sent.
 
 // sql hints from claude AI, in this order inside BEGIN ... COMMIT
 /*

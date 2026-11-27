@@ -13,7 +13,7 @@ import {
     requireStaffAndStudent,
     requireStaff
 
-} from './book-inventories.controller';
+} from './book-inventories.controller.js';
 import { Router } from 'express';
 
 

@@ -20,13 +20,15 @@ describe("POST /books", () => {
     it("[CREATE-01] with only the Staff modal fields, the backend fills the defaults", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.post("/books", {
-            ...WILD_ROBOT,
-            keywords: ["Robots", "nature", "friendship"],
-            publisher: "Piccadilly Press"
-        });
+        const res = await staff
+            .post("/books")
+            .send({
+                ...WILD_ROBOT,
+                keywords: ["Robots", "nature", "friendship"],
+                publisher: "Piccadilly Press"
+            })
+            .expect(201);
 
-        expect(res.status).toBe(201);
         expect(res.body.success).toBe(true);
         expect(res.body.data).toMatchObject({
             _id: expect.any(String),
@@ -61,24 +63,26 @@ describe("POST /books", () => {
     it("[CREATE-02] stores every optional field as sent", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.post("/books", {
-            title: "The Wild Robot Escapes",
-            author: "Peter Brown",
-            isbn: "9780316382045",
-            category: "Fiction",
-            keywords: ["Robots"],
-            publisher: "Little, Brown",
-            genre: "Science fiction",
-            publishedYear: 2018,
-            language: "English",
-            format: "Hardcover",
-            pageCount: 288,
-            description: "Roz the robot sets out to find her island again.",
-            coverImageUrl: "https://example.com/wild-robot-escapes.jpg",
-            shelfReference: "FIC BRO · A4"
-        });
+        const res = await staff
+            .post("/books")
+            .send({
+                title: "The Wild Robot Escapes",
+                author: "Peter Brown",
+                isbn: "9780316382045",
+                category: "Fiction",
+                keywords: ["Robots"],
+                publisher: "Little, Brown",
+                genre: "Science fiction",
+                publishedYear: 2018,
+                language: "English",
+                format: "Hardcover",
+                pageCount: 288,
+                description: "Roz the robot sets out to find her island again.",
+                coverImageUrl: "https://example.com/wild-robot-escapes.jpg",
+                shelfReference: "FIC BRO · A4"
+            })
+            .expect(201);
 
-        expect(res.status).toBe(201);
         expect(res.body.data).toMatchObject({
             genre: "Science fiction",
             publishedYear: 2018,
@@ -93,7 +97,7 @@ describe("POST /books", () => {
     it("[CREATE-03] a duplicate ISBN is a conflict", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.post("/books", {
+        const res = await staff.post("/books").send({
             title: "Copycat",
             author: "Someone",
             isbn: ISBN.midnightLibrary,
@@ -108,7 +112,7 @@ describe("POST /books", () => {
         it("[CREATE-04] a blank title is rejected", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.post("/books", { ...WILD_ROBOT, title: "   " });
+            const res = await staff.post("/books").send({ ...WILD_ROBOT, title: "   " });
 
             expectValidationError(res, "title");
             expect(res.body.error.details.title).toBe("Title is required");
@@ -117,7 +121,7 @@ describe("POST /books", () => {
         it("[CREATE-05] category must be one of the five catalog categories", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.post("/books", { ...WILD_ROBOT, category: "Fantasy" });
+            const res = await staff.post("/books").send({ ...WILD_ROBOT, category: "Fantasy" });
 
             expectValidationError(res, "category");
         });
@@ -125,7 +129,7 @@ describe("POST /books", () => {
         it("[CREATE-06] publishedYear as a string is rejected (no coercion in JSON bodies)", async () => {
             const staff = await signInAs("staff");
 
-            const res = await staff.post("/books", { ...WILD_ROBOT, publishedYear: "2016" });
+            const res = await staff.post("/books").send({ ...WILD_ROBOT, publishedYear: "2016" });
 
             expectValidationError(res, "publishedYear");
         });
@@ -135,7 +139,7 @@ describe("POST /books", () => {
         it("[CREATE-07] a student is not allowed", async () => {
             const student = await signInAs("student");
 
-            const res = await student.post("/books", WILD_ROBOT);
+            const res = await student.post("/books").send(WILD_ROBOT);
 
             expectApiError(res, 403, "FORBIDDEN_ACCESS");
         });

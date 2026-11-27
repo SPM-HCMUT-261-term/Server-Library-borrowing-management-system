@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { pathOf } from "../helpers/api-client.js";
 import { expectApiError } from "../helpers/assertions.js";
+import { pathOf } from "../helpers/client.js";
 import { resetDatabase, signInAs } from "../helpers/session.js";
 import { BOOK_ID, COPY, COPY_ID, UNKNOWN_COPY } from "./fixtures.js";
 
@@ -16,9 +16,8 @@ describe("DELETE /copies/:id", () => {
     it("[DELETE-COPY-01] by barcode: deletes a copy with no history", async () => {
         const staff = await signInAs("staff");
 
-        const res = await staff.delete(copyPath(COPY.midnightAvailable));
+        const res = await staff.delete(copyPath(COPY.midnightAvailable)).expect(200);
 
-        expect(res.status).toBe(200);
         expect(res.body).toEqual({ success: true, message: "Physical copy deleted successfully" });
     });
 
@@ -26,20 +25,17 @@ describe("DELETE /copies/:id", () => {
         // Copy id 25 is WB-00951 (Dế Mèn Phiêu Lưu Ký), which has no loans.
         const staff = await signInAs("staff");
 
-        const res = await staff.delete(copyPath(COPY_ID.deMenAvailable));
+        const res = await staff.delete(copyPath(COPY_ID.deMenAvailable)).expect(200);
 
-        expect(res.status).toBe(200);
         expect(res.body).toEqual({ success: true, message: "Physical copy deleted successfully" });
     });
 
     it("[DELETE-COPY-03] the book detail no longer lists the deleted copy", async () => {
         const staff = await signInAs("staff");
-        const deleted = await staff.delete(copyPath(COPY.midnightAvailable));
-        expect(deleted.status).toBe(200);
+        await staff.delete(copyPath(COPY.midnightAvailable)).expect(200);
 
-        const res = await staff.get(`/books/${BOOK_ID.midnightLibrary}`);
+        const res = await staff.get(`/books/${BOOK_ID.midnightLibrary}`).expect(200);
 
-        expect(res.status).toBe(200);
         expect(res.body.data.stockSummary).toMatchObject({ totalCopies: 3, availableCopies: 1, borrowedCopies: 2 });
         expect(res.body.data.copies.map((copy: { copyCode: string }) => copy.copyCode)).toEqual([
             COPY.midnightReturnedLoan,

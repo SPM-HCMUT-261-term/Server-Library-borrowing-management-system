@@ -11,7 +11,9 @@ import { login } from '@modules/auth/auth.controller.js';
 
 import { adminRouter } from '@modules/admin/admin.routes.js';
 
-import { bookRouter, physicalCopiesRouter } from '@modules/book-inventories/book-inventories.routes';
+import { bookRouter, physicalCopiesRouter } from '@modules/book-inventories/book-inventories.routes.js';
+import { holdsRouter, staffHoldsRouter } from '@modules/holds/holds.routes.js';
+import { staffLoansRouter, studentLoansRouter, meRouter } from '@modules/loans/loans.routes.js';
 import { devToolsRouter } from '@modules/dev-tools/dev-tools.routes.js';
 import { devSessionHeaderMiddleware } from '@modules/dev-tools/dev-session-header.middleware.js';
 
@@ -56,6 +58,21 @@ server.use('/api/v1/books', verificationMiddleware, bookRouter);
 
 // 5.2, 5.35.
 server.use('/api/v1/copies', verificationMiddleware, physicalCopiesRouter);
+
+// 6.1
+server.use('/api/v1/me', verificationMiddleware, meRouter);
+
+// 6.2, 6.3
+server.use('/api/v1/holds', verificationMiddleware, holdsRouter);
+
+// 6.4
+server.use('/api/v1/loans', verificationMiddleware, studentLoansRouter);
+
+// 7.7 (mounted before /staff so /staff/holds does not pass through the loans router first)
+server.use('/api/v1/staff/holds', verificationMiddleware, staffHoldsRouter);
+
+// 7.1 - 7.6
+server.use('/api/v1/staff', verificationMiddleware, staffLoansRouter);
 
 // Development only: POST /api/v1/dev/reset-db empties and reseeds the database, with no login.
 // Opt in with ENABLE_DB_RESET=true in .env; leave it unset anywhere else.
