@@ -36,10 +36,14 @@ written in TypeScript with Express 5 and PostgreSQL.
 - Book catalog and physical-copy management (list, detail, featured, create,
   update, delete, add/update/delete copies), restricted by role.
 - Student holds (place, cancel) and the staff list of holds.
+- Automatic hold expiry: a hold that is not collected by its `collectBy` deadline
+  becomes `Expired` and its copy is `Available` again (checked every 60 seconds,
+  see [Automatic hold expiry](#automatic-hold-expiry)).
 - Loans: the student "My borrowing" dashboard and online renewal, and the staff
   counter (find student, check copy, issue books, find and return a loan, loan records).
 - Zod request validation and a uniform JSON response envelope.
-- A development-only endpoint that resets the database to the demo data.
+- Development-only endpoints that reset the database to the demo data and run
+  the hold expiry on demand.
 
 Every endpoint is described in [doc/API_Contract.md](doc/API_Contract.md).
 
@@ -96,7 +100,7 @@ src/
 │   ├── book-inventories/  Books and physical copies
 │   ├── holds/             Place and cancel holds, staff list of holds
 │   ├── loans/             My borrowing, renew, checkout, return, records
-│   └── dev-tools/         POST /dev/reset-db, X-Session-Cookie header (only when ENABLE_DB_RESET=true)
+│   └── dev-tools/         POST /dev/reset-db, POST /dev/expire-holds, X-Session-Cookie header (only when ENABLE_DB_RESET=true)
 │
 └── shared/
     ├── database/
@@ -105,7 +109,8 @@ src/
     │   ├── init.sql       ② Inserts the demo data (run after schema.sql)
     │   ├── reset-data.sql Empties every app table
     │   ├── drop-all.sql   Drops every app table and the view
-    │   └── init.seed.ts   At startup: creates admin ADM001 if `users` is empty
+    │   ├── init.seed.ts   At startup: creates admin ADM001 if `users` is empty
+    │   └── hold-expiry.ts Expires holds past their deadline (60 s timer started by server.ts)
     ├── middlewares/
     │   ├── session.middleware.ts       express-session with the PostgreSQL session store
     │   └── verification.middleware.ts  "Is logged in" check, used in front of every router
@@ -186,6 +191,10 @@ is the group name Docker Desktop shows.
 | Env file | `.env` | `.env.test.local` |
 | Used by | `npm run dev`, `npm start` | `npm run dev:test`, `npm run test:run`, `npm run test:api` |
 | Data storage | Docker volume `db-data`, **kept** | tmpfs (memory), **lost on every stop** |
+| Memory limit | 512 MB | 512 MB (the 256 MB tmpfs counts toward it) |
+
+Each container is capped at 512 MB of RAM with no extra swap (`mem_limit` and
+`memswap_limit` in `docker-compose.yml`). Check usage with `docker stats --no-stream`.
 
 ### Step 1: Install prerequisites
 
@@ -418,7 +427,7 @@ reloads `init.sql`. Each module folder has its own README:
 | README | What it covers |
 |---|---|
 | [.test/book-inventories/README.md](.test/book-inventories/README.md) | Full setup and run options, the shared helpers, how a supertest test is written, the book-inventories cases and known bugs |
-| [.test/holds/README.md](.test/holds/README.md) | The hold cases (contract 6.2, 6.3, 7.7), their test data, and what the contract leaves open |
+| [.test/holds/README.md](.test/holds/README.md) | The hold cases (contract 6.2, 6.3, 7.7), the automatic hold expiry cases, their test data, and what the contract leaves open |
 | [.test/loans/README.md](.test/loans/README.md) | The loan cases (contract 6.1, 6.4, 7.1–7.6), their test data, and what the contract leaves open |
 
 ### Browsing the data with pgAdmin
@@ -501,11 +510,55 @@ the `connect.sid` session cookie returned by login on later requests.
 | `PUT` | `/copies/:id` | Staff | Update a copy (`:id` = numeric ID or copy code) |
 | `DELETE` | `/copies/:id` | Staff | Delete a copy |
 
+### Holds
+
+| Method | Path | Access | Description |
+|---|---|---|---|
+| `POST` | `/holds` | Student | Place a hold on an available copy of a book. Body: `bookId` |
+| `DELETE` | `/holds/:id` | Owner student, staff | Cancel a `Ready` hold; the copy becomes `Available` (`:id` = hold `_id` or `holdCode`) |
+| `GET` | `/staff/holds` | Staff | List active (`Ready`) holds. Query: `q`, `page`, `limit` |
+
+### Loans
+
+| Method | Path | Access | Description |
+|---|---|---|---|
+| `GET` | `/me/borrowing` | Student | "My borrowing" dashboard: account summary, current loans with renewal status, history |
+| `POST` | `/loans/:id/renew` | Student | Renew one of your own loans once, by 7 days (`:id` = loan `_id` or `borrowCode`) |
+| `GET` | `/staff/students/:accountId` | Staff | Find a student for checkout: loan usage, eligibility, ready holds |
+| `GET` | `/staff/copies/:copyCode/checkout-check` | Staff | Check whether a copy can be issued, with the default due date |
+| `POST` | `/staff/loans/issue` | Staff | Issue 1–5 copies to a student. Body: `studentAccountId`, `items: [{ copyCode, dueDate }]` |
+| `GET` | `/staff/loans/active-by-copy/:copyCode` | Staff | Find the active loan of a copy (return flow) |
+| `POST` | `/staff/loans/:id/return` | Staff | Return a loan. Body: `condition` (`Good` \| `Damaged` \| `Lost`), `conditionNote?` (`:id` = loan `_id` or `borrowCode`) |
+| `GET` | `/staff/loans` | Staff | Loan records. Query: `tab`, `q`, `status`, `sortBy`, `sortOrder`, `page`, `limit` |
+
+Request and response details for every endpoint are in
+[doc/API_Contract.md](doc/API_Contract.md).
+
 ### Development only
 
 | Method | Path | Access | Description |
 |---|---|---|---|
 | `POST` | `/dev/reset-db` | Public, only when `ENABLE_DB_RESET=true` | Truncate app tables and reload `init.sql` |
+| `POST` | `/dev/expire-holds` | Public, only when `ENABLE_DB_RESET=true` | Run the hold expiry now. Optional body `{ "asOf": "<ISO date-time>" }` acts as if that instant were now |
+
+### Automatic hold expiry
+
+A hold that is still `Ready` after its `collectBy` deadline becomes `Expired`,
+and its copy goes from `Reserved` back to `Available`. The server checks once at
+startup and then every 60 seconds (`src/shared/database/hold-expiry.ts`).
+`POST /holds` and `POST /staff/loans/issue` also run the check first, so a copy
+freed a moment ago can be taken right away.
+
+This rule is **not** in `doc/API_Contract.md`, which still says holds are only
+released by a cancel or a checkout (6.2, rule 5). As a result:
+
+- `isPastDeadline` in `GET /staff/holds` is `true` for at most about 60 seconds,
+  before the hold leaves the list.
+- `DELETE /holds/:id` on an expired hold returns `409 HOLD_NOT_CANCELLABLE`.
+
+The API tests can't wait for a real deadline, so they call
+`POST /dev/expire-holds` with an `asOf` after `collectBy`
+(`.test/holds/hold-expiry.api.test.ts`).
 
 ### Response format
 

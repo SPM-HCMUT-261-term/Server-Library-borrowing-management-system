@@ -31,7 +31,10 @@ npx vitest run --config .test/vitest.config.ts -t "HOLD-CANCEL-05"  # one test
 | `create-hold.api.test.ts` | `POST /holds` | 6.2 | Student | 14 | HOLD-CREATE-01 … 13 |
 | `cancel-hold.api.test.ts` | `DELETE /holds/:id` | 6.3 | Owner student, Staff | 12 | HOLD-CANCEL-01 … 12 |
 | `staff-holds.api.test.ts` | `GET /staff/holds` | 7.7 | Staff | 14 | STAFF-HOLDS-01 … 10 |
-| **Total** | | | | **40** | |
+| `hold-expiry.api.test.ts` | `POST /dev/expire-holds` (dev only) + the endpoints above | not in contract | none (dev route) | 12 | HOLD-EXPIRY-01 … 12 |
+| **Total** | | | | **52** | |
+
+`hold-expiry.api.test.ts` is the exception to the black-box rule below: automatic hold expiry is a project rule (FR-BORROW-02) that `doc/API_Contract.md` does not describe, so these tests follow the implementation in `src/shared/database/hold-expiry.ts`.
 
 The test counts include each row of an `it.each` table, for example the `staff` and `admin` rows of an access test.
 
@@ -86,6 +89,13 @@ All of these live in `.test/helpers/borrowing.ts`, shared with the loans tests.
 - `q` finds a hold by holdCode, account id, student name, copy code or book title.
 - `limit=1` splits two holds over two pages.
 - Students and admins get 403, a guest gets 401.
+
+**`hold-expiry.api.test.ts`: automatic hold expiry**
+- The server expires holds on a 60 s timer. The tests don't wait for it: they call `POST /dev/expire-holds { asOf }`, which runs the same expiry as if `asOf` were now (one second after `collectBy`).
+- **When:** nothing expires before or exactly at `collectBy`; one second later the hold is `Expired` and its copy is released; a second run changes nothing.
+- **Effects:** the copy is `Available`, the hold leaves `GET /staff/holds`, another student or the same student can hold the copy again, and `DELETE /holds/:id` answers `409 HOLD_NOT_CANCELLABLE`.
+- **Left alone:** fulfilled holds (copy stays `Borrowed`) and cancelled holds.
+- **Dev route input:** an `asOf` that is not an ISO date-time gets `400 VALIDATION_ERROR`.
 
 ## Call graph
 

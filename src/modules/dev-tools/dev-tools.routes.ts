@@ -2,8 +2,10 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { Router, type Request, type Response } from "express";
+import z from "zod";
 
 import { pool } from "@shared/database/db.js";
+import { expireOverdueHolds } from "@shared/database/hold-expiry.js";
 
 // Development helper: empties the app tables and reloads the demo data from init.sql,
 // so every Postman test can start from the same database state.
@@ -72,6 +74,44 @@ devToolsRouter.post("/reset-db", async (_req: Request, res: Response): Promise<v
         });
     } finally {
         client.release();
+    }
+});
+
+// POST /api/v1/dev/expire-holds   body: { asOf?: ISO date-time with offset }
+// Runs the automatic hold expiry now (see shared/database/hold-expiry.ts) instead of waiting for the
+// 60 s timer. `asOf` makes it act as if that instant were now, so a test can expire a hold whose
+// collect_by is tomorrow without changing any data or the clock.
+const expireHoldsBodySchema = z.object({
+    asOf: z.iso.datetime({ offset: true }).optional()
+});
+
+devToolsRouter.post("/expire-holds", async (req: Request, res: Response): Promise<void> => {
+    const parsed = expireHoldsBodySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+        res.status(400).json({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: "Invalid input",
+                details: Object.fromEntries(parsed.error.issues.map((issue) => [issue.path.join("."), issue.message]))
+            }
+        });
+        return;
+    }
+
+    try {
+        const asOf = parsed.data.asOf === undefined ? undefined : new Date(parsed.data.asOf);
+        const result = await expireOverdueHolds(pool, asOf);
+        res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        console.error("Hold expiry failed:", error);
+        res.status(500).json({
+            success: false,
+            error: {
+                code: "HOLD_EXPIRY_FAILED",
+                message: error instanceof Error ? error.message : "Hold expiry failed"
+            }
+        });
     }
 });
 
